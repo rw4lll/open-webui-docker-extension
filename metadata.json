@@ -1,0 +1,13 @@
+{
+  "icon": "open-webui.svg",
+  "vm": {
+    "composefile": "docker-compose.yaml"
+  },
+  "ui": {
+    "dashboard-tab": {
+      "title": "Open WebUI",
+      "src": "index.html",
+      "root": "ui"
+    }
+  }
+}

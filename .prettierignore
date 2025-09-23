@@ -1,0 +1,24 @@
+# Dependencies
+node_modules
+ui/node_modules
+
+# Builds / Dist
+dist
+build
+coverage
+ui/dist
+ui/build
+
+# Generated assets
+*.log
+*.svg
+
+# Root and non-UI files we don't want auto-formatted
+Dockerfile
+docker-compose.yml
+docker-compose.yaml
+metadata.json
+ui/index.html
+
+# Lockfiles snapshot folders (if any)
+.pnpm-store

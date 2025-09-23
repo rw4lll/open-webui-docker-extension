@@ -1,0 +1,17 @@
+services:
+  # Placeholder service to satisfy Docker extension requirements
+  extension-placeholder:
+    image: alpine:latest
+    command: ["sh", "-c", "echo 'Open WebUI Extension loaded successfully' && sleep infinity"]
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 50
+    labels:
+      - "com.docker.extension.openwebui=true"
+      - "com.docker.extension.openwebui.role=placeholder"
+volumes:
+  open-webui-docker-extension-data:
+  open-webui-docker-extension-cache:
+  open-webui-docker-extension-chroma:
