@@ -33,6 +33,11 @@ describe('ContainerService', () => {
     await Promise.all([first, second]);
 
     expect(execMock.mock.calls.filter(([command]) => command === 'run')).toHaveLength(1);
+
+    const runArgs = execMock.mock.calls.find(([command]) => command === 'run')?.[1];
+    expect(runArgs).toBeTruthy();
+    expect(runArgs as string[]).toContain('--restart');
+    expect(runArgs as string[]).toContain('unless-stopped');
   });
 
   it('allows retry after a failed createContainer', async () => {
@@ -52,6 +57,31 @@ describe('ContainerService', () => {
 
     const runCalls = execMock.mock.calls.filter(([command]) => command === 'run');
     expect(runCalls).toHaveLength(2);
+  });
+
+  it('configures restart policy based on autoStart flag', async () => {
+    listContainersMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValue([]);
+
+    const service = createContainerService({ client });
+
+    await service.createContainer({ image: 'example/image:1.0.0', port: '8090', autoStart: true });
+
+    const autoRunArgs = execMock.mock.calls.find(
+      ([command, args]) => command === 'run' && args.includes('unless-stopped'),
+    )?.[1];
+    expect(autoRunArgs).toBeTruthy();
+    expect(autoRunArgs as string[]).toContain('--restart');
+
+    execMock.mockClear();
+    listContainersMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValue([]);
+
+    await service.createContainer({ image: 'example/image:1.0.0', port: '8091', autoStart: false });
+
+    const manualRunArgs = execMock.mock.calls.find(
+      ([command, args]) => command === 'run' && args.includes('--restart'),
+    )?.[1];
+    expect(manualRunArgs).toBeTruthy();
+    expect(manualRunArgs as string[]).toContain('no');
   });
 
   it('throws descriptive error when port conflict is not from our container', async () => {

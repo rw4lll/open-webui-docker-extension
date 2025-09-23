@@ -13,6 +13,7 @@ import { useContainerStatus } from './hooks/useContainerStatus';
 import { useContainerActions } from './hooks/useContainerActions';
 import { useDockerModelRunner } from './hooks/useDockerModelRunner';
 import { useExtensionConfig } from './hooks/useExtensionConfig';
+import { useAutoStartContainer } from './hooks/useAutoStartContainer';
 import { getDDClient } from './services/dockerDesktopClient';
 import { ErrorBoundary } from './ErrorBoundary';
 import { DMR_GATE_TIMEOUT_MS } from './constants';
@@ -48,6 +49,13 @@ export function App() {
       configsEqual,
       ensureIntegration,
     });
+
+  useAutoStartContainer({
+    autoStart: config.autoStart,
+    status,
+    loading,
+    startContainer,
+  });
 
   const displayError = useMemo(() => error || statusError, [error, statusError]);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('config');
@@ -127,7 +135,6 @@ export function App() {
           dmrStatus={dmrStatus}
           dmrInitializing={dmrInitializing}
           dmrHoldOpen={dmrHoldOpen}
-          dmrHoldRemainingMs={dmrHoldRemainingMs}
           onSetup={startContainer}
           onOpen={openBrowser}
           onStop={stopContainer}

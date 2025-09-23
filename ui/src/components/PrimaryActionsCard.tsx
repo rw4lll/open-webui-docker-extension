@@ -49,7 +49,6 @@ export function PrimaryActionsCard({
   dmrStatus,
   dmrInitializing,
   dmrHoldOpen,
-  dmrHoldRemainingMs,
 }: PrimaryActionsCardProps) {
   const containerState = status?.status;
   const isRunning = containerState === 'running';
@@ -110,11 +109,8 @@ export function PrimaryActionsCard({
   };
 
   const loadingText = needsSetup ? 'Setting up Open WebUI...' : 'Working on Open WebUI...';
-  const dmrHoldSeconds = dmrHoldOpen
-    ? Math.max(1, Math.ceil(Math.max(0, dmrHoldRemainingMs ?? 0) / 1000))
-    : 0;
   const dmrLoadingText = dmrHoldOpen
-    ? `Waiting for Docker Model Runner setup (~${dmrHoldSeconds}s remaining)...`
+    ? `Waiting for Docker Model Runner setup...`
     : 'Setting up Docker Model Runner integration...';
 
   return (

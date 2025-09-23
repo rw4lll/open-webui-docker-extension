@@ -27,7 +27,7 @@ Give Docker Model Runner a welcoming home inside Docker Desktop. This extension 
 4. Once installed, open the extension from the left-hand navigation.
 
 ## Launch your first session
-1. Press **Start** to create (or recreate) the Open WebUI container with recommended defaults.
+1. Press **Set Up Open WebUI** button to create the Open WebUI container with recommended defaults.
 2. Wait for the status indicator to turn green, then click **Open** to launch Open WebUI in your browser.
 3. Choose a model exposed by Docker Model Runner, or connect additional providers from Open WebUI’s settings.
 4. Explore chats, embeddings, voice commands, document uploads, and custom workflows—all powered by Docker Model Runner.

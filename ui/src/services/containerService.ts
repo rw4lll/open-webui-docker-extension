@@ -51,6 +51,8 @@ export class ContainerService {
       `${key}=${value}`,
     ]);
 
+    const restartPolicy = config.autoStart ? 'unless-stopped' : 'no';
+
     return [
       '-d',
       '--name',
@@ -71,7 +73,7 @@ export class ContainerService {
       '-v',
       `${VOLUME_NAMES.chroma}:/root/.cache/chroma`,
       '--restart',
-      'unless-stopped',
+      restartPolicy,
       ...labelArgs,
       config.image,
     ];
