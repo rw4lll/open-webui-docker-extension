@@ -45,6 +45,7 @@ Want to tweak the image tag or listen on another port? Adjust the settings panel
 - **Data safety**: Volumes named `open-webui-docker-extension-*` hold your workspace data. Delete them from Docker Desktop if you ever want a clean slate.
 
 ## Troubleshooting
+- If you're getting "Failed to start container: Failed to create container: Error: Image pull denied by registry for ghcr.io/open-webui/open-webui:main. You may be rate-limited or not authorized." - you likely used ghcr.io in the past and have revoked/expired token. ghcr.io doesn't allow to pull even public images, if token is revoked or expired. You should either logout with `docker logout ghcr.io` command, or re-login with `docker login ghcr.io` with valid PAT.
 - Container stuck on starting? Check that the chosen port isn’t already in use and that Docker Desktop has resources available.
 - Can’t reach the browser view? Make sure the container shows a green “Running” badge, then click **Open** again.
 - Seeing validation warnings? Adjust the image name or port according to the hint shown in the settings panel.
