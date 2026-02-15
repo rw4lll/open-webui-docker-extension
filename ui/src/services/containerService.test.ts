@@ -141,6 +141,110 @@ describe('ContainerService', () => {
     expect(execMock).not.toHaveBeenCalled();
   });
 
+  it('recreates container when start fails due to missing volume', async () => {
+    const existingContainer: DockerListedContainer = {
+      Id: 'existing123',
+      Names: ['/openwebui-extension-service'],
+      Image: 'ghcr.io/open-webui/open-webui:main',
+      State: 'exited',
+      Status: 'Exited (1) 2 hours ago',
+      Ports: [],
+      Created: Date.now(),
+    } as DockerListedContainer;
+
+    listContainersMock.mockResolvedValueOnce([existingContainer]).mockResolvedValueOnce([]);
+
+    execMock.mockImplementation(async (command) => {
+      if (command === 'start') {
+        throw new Error(
+          'failed to mount local volume: mount open-webui-docker-extension-data: no such volume',
+        );
+      }
+      return { stdout: '', stderr: '' };
+    });
+
+    const service = createContainerService({ client });
+    await expect(
+      service.createContainer({
+        image: 'example/image:1.0.0',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(execMock).toHaveBeenCalledWith('start', ['existing123']);
+    expect(execMock).toHaveBeenCalledWith('rm', ['-f', 'existing123']);
+    expect(execMock.mock.calls.some(([command]) => command === 'run')).toBe(true);
+  });
+
+  it('recovers when existing container is removed during start/recreate flow', async () => {
+    const existingContainer: DockerListedContainer = {
+      Id: 'vanished123',
+      Names: ['/openwebui-extension-service'],
+      Image: 'ghcr.io/open-webui/open-webui:main',
+      State: 'exited',
+      Status: 'Exited (0) 10 seconds ago',
+      Ports: [],
+      Created: Date.now(),
+    } as DockerListedContainer;
+
+    listContainersMock.mockResolvedValueOnce([existingContainer]).mockResolvedValueOnce([]);
+
+    execMock.mockImplementation(async (command) => {
+      if (command === 'start') {
+        throw new Error('Error response from daemon: No such container: vanished123');
+      }
+      if (command === 'rm') {
+        throw new Error('Error response from daemon: No such container: vanished123');
+      }
+      return { stdout: '', stderr: '' };
+    });
+
+    const service = createContainerService({ client });
+    await expect(
+      service.createContainer({
+        image: 'example/image:1.0.0',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(execMock).toHaveBeenCalledWith('start', ['vanished123']);
+    expect(execMock).toHaveBeenCalledWith('rm', ['-f', 'vanished123']);
+    expect(execMock.mock.calls.some(([command]) => command === 'run')).toBe(true);
+  });
+
+  it('continues container creation when floating-tag pre-pull hits transient network errors', async () => {
+    listContainersMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    execMock.mockImplementation(async (command, args) => {
+      if (command === 'pull' && args[0] === 'ghcr.io/open-webui/open-webui:main') {
+        throw { stderr: 'Get "https://ghcr.io/v2/": dial tcp: i/o timeout' };
+      }
+      return { stdout: '', stderr: '' };
+    });
+
+    const service = createContainerService({ client });
+    await expect(
+      service.createContainer({
+        image: 'ghcr.io/open-webui/open-webui:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(execMock).toHaveBeenCalledWith('pull', ['ghcr.io/open-webui/open-webui:main']);
+    const runArgs = execMock.mock.calls.find(([command]) => command === 'run')?.[1] as
+      | string[]
+      | undefined;
+    expect(runArgs).toBeTruthy();
+    expect(runArgs).toContain('--pull');
+    expect(runArgs).toContain('always');
+  });
+
   it('injects OpenAI provider env vars only for openai provisioner', async () => {
     listContainersMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValue([]);
 
@@ -249,6 +353,31 @@ describe('ContainerService', () => {
     expect(result.updateAvailable).toBe(true);
     expect(result.localDigest).toBe(LOCAL_DIGEST);
     expect(result.remoteDigest).toBe(REMOTE_DIGEST);
+  });
+
+  it('handles missing local floating-tag image without crashing update checks', async () => {
+    execMock.mockImplementation(async (command, args) => {
+      if (command === 'image' && args[0] === 'inspect') {
+        throw new Error(
+          'Error response from daemon: No such image: ghcr.io/open-webui/open-webui:main',
+        );
+      }
+      if (command === 'buildx' && args[0] === 'imagetools' && args[1] === 'inspect') {
+        return {
+          stdout: `Name: ghcr.io/open-webui/open-webui:main\nDigest: ${REMOTE_DIGEST}\n`,
+          stderr: '',
+        };
+      }
+      return { stdout: '', stderr: '' };
+    });
+
+    const service = createContainerService({ client });
+    const result = await service.checkImageUpdateAvailability('ghcr.io/open-webui/open-webui:main');
+
+    expect(result.supported).toBe(true);
+    expect(result.updateAvailable).toBe(false);
+    expect(result.remoteDigest).toBe(REMOTE_DIGEST);
+    expect(result.error).toContain('Local image digest is unavailable');
   });
 
   it('skips update notice when remote tag digest cannot be determined', async () => {
