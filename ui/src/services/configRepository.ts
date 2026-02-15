@@ -1,6 +1,11 @@
-import { DEFAULT_IMAGE, DEFAULT_PORT, DEFAULT_AUTO_START } from '../constants';
+import {
+  DEFAULT_AUTO_START,
+  DEFAULT_IMAGE,
+  DEFAULT_PORT,
+  DEFAULT_PROVISIONER,
+} from '../constants';
 import { log } from '../logger';
-import type { ExtensionConfig } from '../types';
+import type { ExtensionConfig, ProvisionerMode } from '../types';
 import { createLocalStorageAdapter, type StorageAdapter } from './storage';
 
 const STORAGE_KEY = 'openwebui-extension-config';
@@ -13,6 +18,7 @@ const DEFAULT_CONFIG: ExtensionConfig = {
   image: DEFAULT_IMAGE,
   port: DEFAULT_PORT,
   autoStart: DEFAULT_AUTO_START,
+  provisioner: DEFAULT_PROVISIONER,
 };
 
 function normalizeImage(image: string): string {
@@ -67,6 +73,10 @@ function isValidImageName(image: string): boolean {
   return IMAGE_REGEX.test(image);
 }
 
+function normalizeProvisioner(mode: unknown): ProvisionerMode {
+  return mode === 'legacy-function' ? 'legacy-function' : DEFAULT_PROVISIONER;
+}
+
 export class ConfigRepository {
   constructor(private readonly storage: StorageAdapter) {}
 
@@ -109,6 +119,7 @@ export class ConfigRepository {
       image: normalizeImage(config.image),
       port: normalizePort(config.port),
       autoStart: typeof config.autoStart === 'boolean' ? config.autoStart : DEFAULT_AUTO_START,
+      provisioner: normalizeProvisioner(config.provisioner),
     };
   }
 
@@ -138,6 +149,12 @@ export class ConfigRepository {
       }
     }
 
+    if (!config.provisioner || typeof config.provisioner !== 'string') {
+      errors.push('Provisioner mode is required');
+    } else if (!['openai', 'legacy-function'].includes(config.provisioner)) {
+      errors.push('Provisioner mode must be either openai or legacy-function');
+    }
+
     return errors;
   }
 
@@ -145,7 +162,8 @@ export class ConfigRepository {
     return (
       config1.image === config2.image &&
       config1.port === config2.port &&
-      config1.autoStart === config2.autoStart
+      config1.autoStart === config2.autoStart &&
+      config1.provisioner === config2.provisioner
     );
   }
 

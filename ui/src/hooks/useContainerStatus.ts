@@ -1,13 +1,18 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
+import {
+  CONTAINER_POLL_INTERVAL_RUNNING_MS,
+  CONTAINER_POLL_INTERVAL_TRANSIENT_MS,
+} from '../constants';
 import { log } from '../logger';
-import { createContainerService, type ContainerService } from '../services/containerService';
+import type { ContainerService } from '../services/containerService';
 import type { ContainerStatus, ExtensionConfig } from '../types';
 import { deriveContainerStatus } from '../utils/containerStatus';
 
 interface UseContainerStatusOptions {
-  pollIntervalMs?: number;
+  transientPollIntervalMs?: number;
+  runningPollIntervalMs?: number;
   initialDelayMs?: number;
 }
 
@@ -21,10 +26,9 @@ interface UseContainerStatusResult {
 
 export function useContainerStatus(
   config: ExtensionConfig,
+  service: ContainerService,
   options: UseContainerStatusOptions = {},
-  serviceOverride?: ContainerService,
 ): UseContainerStatusResult {
-  const service = useMemo(() => serviceOverride ?? createContainerService(), [serviceOverride]);
   const [status, setStatus] = useState<ContainerStatus | null>(null);
   const [statusError, setStatusError] = useState('');
 
@@ -40,7 +44,14 @@ export function useContainerStatus(
     }
   }, [config, service]);
 
-  const { pollIntervalMs = 5000, initialDelayMs = 100 } = options;
+  const {
+    transientPollIntervalMs = CONTAINER_POLL_INTERVAL_TRANSIENT_MS,
+    runningPollIntervalMs = CONTAINER_POLL_INTERVAL_RUNNING_MS,
+    initialDelayMs = 100,
+  } = options;
+
+  const effectivePollIntervalMs =
+    status?.status === 'running' ? runningPollIntervalMs : transientPollIntervalMs;
 
   useEffect(() => {
     let isMounted = true;
@@ -54,14 +65,14 @@ export function useContainerStatus(
       if (isMounted) {
         fetchStatus();
       }
-    }, pollIntervalMs);
+    }, effectivePollIntervalMs);
 
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
       clearInterval(intervalId);
     };
-  }, [fetchStatus, initialDelayMs, pollIntervalMs]);
+  }, [effectivePollIntervalMs, fetchStatus, initialDelayMs]);
 
   const clearStatusError = useCallback(() => setStatusError(''), []);
 

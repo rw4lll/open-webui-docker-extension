@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { log } from '../logger';
-import { createContainerService } from '../services/containerService';
+import type { ContainerService } from '../services/containerService';
 import type { ExtensionConfig, ContainerStatus, ServiceStatus } from '../types';
 import { getDDClient } from '../services/dockerDesktopClient';
 import { deriveContainerStatus } from '../utils/containerStatus';
@@ -10,6 +10,7 @@ import { retryWithBackoff } from '../utils/retry';
 
 interface UseContainerActionsOptions {
   config: ExtensionConfig;
+  containerService: ContainerService;
   status: ContainerStatus | null;
   setStatus: Dispatch<SetStateAction<ContainerStatus | null>>;
   fetchStatus: () => Promise<void>;
@@ -23,6 +24,7 @@ interface UseContainerActionsOptions {
   persistConfig: (config: ExtensionConfig) => ExtensionConfig;
   configsEqual: (a: ExtensionConfig, b: ExtensionConfig) => boolean;
   ensureIntegration: (options?: { force?: boolean }) => Promise<ServiceStatus | null>;
+  invalidateDMRCache?: () => void;
 }
 
 interface UseContainerActionsResult {
@@ -30,11 +32,13 @@ interface UseContainerActionsResult {
   stopContainer: () => void;
   restartContainer: () => void;
   updateConfig: (nextConfig: ExtensionConfig) => Promise<void>;
+  updateImageAndRecreate: () => Promise<boolean>;
   openBrowser: () => void;
 }
 
 export function useContainerActions({
   config,
+  containerService,
   status,
   setStatus,
   fetchStatus,
@@ -45,9 +49,10 @@ export function useContainerActions({
   persistConfig,
   configsEqual,
   ensureIntegration,
+  invalidateDMRCache,
 }: UseContainerActionsOptions): UseContainerActionsResult {
   const ddClient = getDDClient();
-  const service = useMemo(() => createContainerService(), []);
+  const service = containerService;
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scheduleStatusRefresh = useCallback(
@@ -138,6 +143,7 @@ export function useContainerActions({
     void runAsync(
       async () => {
         try {
+          invalidateDMRCache?.();
           log.debug('Starting container with config:', config);
           const containerExists = await service.containerExists();
           log.debug('Container exists:', containerExists);
@@ -161,21 +167,23 @@ export function useContainerActions({
       },
       { errorPrefix: 'Failed to start container' },
     );
-  }, [config, ensureIntegration, runAsync, scheduleStatusRefresh, service, setMessage]);
+  }, [config, ensureIntegration, invalidateDMRCache, runAsync, scheduleStatusRefresh, service, setMessage]);
 
   const stopContainer = useCallback(() => {
+    invalidateDMRCache?.();
     runServiceAction(() => service.stopContainer(), {
       successMessage: 'Container stopped successfully',
       errorPrefix: 'Failed to stop container',
     });
-  }, [runServiceAction, service]);
+  }, [invalidateDMRCache, runServiceAction, service]);
 
   const restartContainer = useCallback(() => {
+    invalidateDMRCache?.();
     runServiceAction(() => service.restartContainer(), {
       successMessage: 'Container restarted successfully',
       errorPrefix: 'Failed to restart container',
     });
-  }, [runServiceAction, service]);
+  }, [invalidateDMRCache, runServiceAction, service]);
 
   const updateConfig = useCallback(
     async (nextConfig: ExtensionConfig) => {
@@ -192,6 +200,7 @@ export function useContainerActions({
             const containerExists = await service.containerExists();
 
             if (containerExists && configChanged) {
+              invalidateDMRCache?.();
               setMessage('Configuration changed. Recreating container...');
               await service.recreateContainer(normalized);
               setMessage('Container recreated successfully with new configuration');
@@ -223,8 +232,47 @@ export function useContainerActions({
       service,
       setMessage,
       validateConfig,
+      invalidateDMRCache,
     ],
   );
+
+  const updateImageAndRecreate = useCallback(async (): Promise<boolean> => {
+    const result = await runAsync(
+      async () => {
+        try {
+          invalidateDMRCache?.();
+          setMessage('Pulling updated image...');
+          await service.pullImage(config.image);
+
+          setMessage('Applying image update...');
+          await service.recreateContainer(config);
+
+          setMessage('Finalizing Docker Model Runner integration...');
+          await ensureIntegration({ force: true });
+
+          await pollForUpdatedStatus(config, 12, 700);
+          scheduleStatusRefresh(1000);
+          setMessage('Open WebUI updated and restarted successfully');
+          return true;
+        } catch (err) {
+          log.error('Update image and recreate error:', err);
+          throw err;
+        }
+      },
+      { errorPrefix: 'Failed to update image and restart service' },
+    );
+
+    return result === true;
+  }, [
+    config,
+    ensureIntegration,
+    invalidateDMRCache,
+    pollForUpdatedStatus,
+    runAsync,
+    scheduleStatusRefresh,
+    service,
+    setMessage,
+  ]);
 
   const openBrowser = useCallback(() => {
     try {
@@ -245,6 +293,7 @@ export function useContainerActions({
     stopContainer,
     restartContainer,
     updateConfig,
+    updateImageAndRecreate,
     openBrowser,
   };
 }

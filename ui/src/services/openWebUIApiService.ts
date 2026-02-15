@@ -10,16 +10,22 @@ import type {
 import { defaultAuthTokenStore, type AuthTokenStore } from './authTokenStore';
 import { FunctionsClient } from './functionsClient';
 import { OpenWebUIHttpClient, type HttpRequestOptions } from './openWebUIHttpClient';
-import { DockerModelRunnerOrchestrator } from './dockerModelRunnerOrchestrator';
-
-const DOCKER_MODEL_RUNNER_FUNCTION_ID = 'docker_model_runner';
+import {
+  LegacyFunctionProvisioner,
+  OpenAIEnvProvisioner,
+  ProvisionerRegistry,
+  toServiceStatus,
+} from './provisioners';
+import { buildBackoffDelays, retryWithBackoff } from '../utils/retry';
 
 export class OpenWebUIApiService {
   private config: ExtensionConfig;
   private dmrConfig: DockerModelRunnerConfig;
   private readonly http: OpenWebUIHttpClient;
   private readonly functions: FunctionsClient;
-  private readonly orchestrator: DockerModelRunnerOrchestrator;
+  private readonly legacyProvisioner: LegacyFunctionProvisioner;
+  private readonly openAIProvisioner: OpenAIEnvProvisioner;
+  private readonly provisionerRegistry: ProvisionerRegistry;
   private readonly functionsCacheTtlMs: number;
 
   constructor(
@@ -40,16 +46,25 @@ export class OpenWebUIApiService {
 
     this.functionsCacheTtlMs = Math.max(60 * 1000, Math.floor(this.dmrConfig.modelCacheTtl) * 1000);
     this.functions = new FunctionsClient(this.http, this.functionsCacheTtlMs);
-    this.orchestrator = new DockerModelRunnerOrchestrator({
+    this.legacyProvisioner = new LegacyFunctionProvisioner({
       http: this.http,
       functions: this.functions,
       dmrConfig: this.dmrConfig,
+    });
+    this.openAIProvisioner = new OpenAIEnvProvisioner({
+      http: this.http,
+      dmrConfig: this.dmrConfig,
+    });
+    this.provisionerRegistry = new ProvisionerRegistry({
+      legacyProvisioner: this.legacyProvisioner,
+      openAIProvisioner: this.openAIProvisioner,
     });
 
     log.debug('OpenWebUIApiService initialized:', {
       apiBaseUrl: this.http.getApiBaseUrl(),
       externalPort: this.config.port,
       containerName: this.http.getContainerName(),
+      provisioner: this.config.provisioner,
       dmrConfig: this.dmrConfig,
       retryDelays: this.http.getRetryDelays(),
       functionsCacheTtlMs: this.functionsCacheTtlMs,
@@ -68,8 +83,11 @@ export class OpenWebUIApiService {
     this.config = newConfig;
     this.http.updateConfig(newConfig);
     this.functions.clearCache();
-    this.orchestrator.resetConnectivityCache();
-    log.debug('OpenWebUIApiService config updated - external port:', newConfig.port);
+    this.provisionerRegistry.resetAllConnectivityCaches();
+    log.debug('OpenWebUIApiService config updated:', {
+      externalPort: newConfig.port,
+      provisioner: newConfig.provisioner,
+    });
   }
 
   async isContainerHealthy(): Promise<boolean> {
@@ -81,15 +99,15 @@ export class OpenWebUIApiService {
   }
 
   async isDMRFunctionInstalled(): Promise<boolean> {
-    return this.functions.isFunctionInstalled(DOCKER_MODEL_RUNNER_FUNCTION_ID);
+    return this.legacyProvisioner.isDMRFunctionInstalled();
   }
 
   async getDMRFunctionStatus(): Promise<OpenWebUIFunction | null> {
-    return this.functions.getFunctionById(DOCKER_MODEL_RUNNER_FUNCTION_ID);
+    return this.legacyProvisioner.getDMRFunctionStatus();
   }
 
   async installDMRFunction(): Promise<FunctionInstallResult> {
-    return this.orchestrator.installDMRFunction();
+    return this.legacyProvisioner.installDMRFunction();
   }
 
   async ensureFunctionEnabled(id: string, desired: boolean): Promise<void> {
@@ -97,11 +115,59 @@ export class OpenWebUIApiService {
   }
 
   async setupDockerModelRunnerIntegration(): Promise<ServiceStatus> {
-    return this.orchestrator.setupIntegration();
+    const provisioner = this.provisionerRegistry.resolve(this.config.provisioner);
+    const status = await provisioner.setupIntegration();
+
+    if (status.integrationConfigured) {
+      try {
+        await this.cleanupInactiveArtifactsWithRetry();
+      } catch (error) {
+        log.warn('Failed to cleanup inactive provisioner artifacts:', error);
+      }
+    } else {
+      log.debug(
+        'Skipping inactive provisioner cleanup: active provisioner setup did not configure integration successfully',
+      );
+    }
+
+    return toServiceStatus(status);
+  }
+
+  async verifyDockerModelRunnerIntegration(): Promise<ServiceStatus> {
+    const provisioner = this.provisionerRegistry.resolve(this.config.provisioner);
+    const status = await provisioner.verifyIntegration();
+    return toServiceStatus(status);
   }
 
   async getServiceStatus(): Promise<ServiceStatus> {
-    return this.orchestrator.getServiceStatus();
+    return this.verifyDockerModelRunnerIntegration();
+  }
+
+  private async cleanupInactiveArtifactsWithRetry(): Promise<void> {
+    const delays = buildBackoffDelays({
+      initialDelayMs: 1_000,
+      maxDelayMs: 8_000,
+      maxAttempts: 4,
+      factor: 2,
+    });
+
+    await retryWithBackoff(
+      async () => {
+        if (this.config.provisioner === 'openai') {
+          await this.legacyProvisioner.cleanupInactiveArtifacts();
+        } else {
+          await this.openAIProvisioner.cleanupInactiveArtifacts();
+        }
+      },
+      {
+        maxAttempts: delays.length + 1,
+        delays,
+        errorFactory: (lastError, attempts) =>
+          new Error(`Inactive provisioner cleanup failed after ${attempts} attempts`, {
+            cause: lastError,
+          }),
+      },
+    );
   }
 
   // ===== Internal helpers exposed for tests =====

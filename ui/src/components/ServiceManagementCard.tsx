@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
+import { PROVISIONER_LABELS } from '../constants';
 import type { ContainerStatus, ServiceStatus } from '../types';
 
 interface ServiceManagementCardProps {
@@ -19,8 +20,8 @@ interface ServiceManagementCardProps {
   loading: boolean;
   dmrInitializing?: boolean;
   dmrStatus?: ServiceStatus | null;
+  dmrGateMode?: 'hard' | 'soft' | 'none';
   dmrHoldOpen?: boolean;
-  dmrHoldRemainingMs?: number;
   onStart: () => void;
   onStop: () => void;
   onRestart: () => void;
@@ -32,6 +33,7 @@ export function ServiceManagementCard({
   loading,
   dmrInitializing,
   dmrStatus,
+  dmrGateMode = 'none',
   dmrHoldOpen,
   onStart,
   onStop,
@@ -43,12 +45,16 @@ export function ServiceManagementCard({
   const canStop = isRunning && !loading;
   const canRestart = isRunning && !loading;
   const canStart = !loading && containerState !== 'running' && containerState !== 'restarting';
+  const activeProvisioner = dmrStatus?.provisionerMode ?? status?.config.provisioner ?? 'openai';
+  const integrationConfigured =
+    dmrStatus?.integrationConfigured ??
+    (dmrStatus ? dmrStatus.functionInstalled && dmrStatus.functionEnabled : false);
   const dmrReady =
     !!dmrStatus &&
-    dmrStatus.functionInstalled &&
-    dmrStatus.functionEnabled &&
+    integrationConfigured &&
     dmrStatus.dockerModelRunnerConnected;
-  const dmrSetupInProgress = Boolean(dmrInitializing || dmrHoldOpen);
+  const dmrSetupBlocking = dmrGateMode === 'hard' && Boolean(dmrHoldOpen);
+  const dmrSetupInProgress = Boolean(dmrInitializing || dmrSetupBlocking || dmrGateMode === 'soft');
 
   const effectivePort = status?.config?.port;
 
@@ -113,9 +119,9 @@ export function ServiceManagementCard({
   if (dmrSetupInProgress) {
     dmrStatusLabel = 'Setting Up';
     dmrChipColor = 'info';
-    dmrDescription = dmrHoldOpen
+    dmrDescription = dmrSetupBlocking
       ? `Setting up Docker Model Runner integration...`
-      : 'Checking Docker Model Runner integration...';
+      : 'Checking Docker Model Runner integration in the background...';
   } else if (!dmrStatus) {
     dmrStatusLabel = 'Pending';
     dmrChipColor = 'default';
@@ -123,21 +129,27 @@ export function ServiceManagementCard({
   } else if (dmrReady) {
     dmrStatusLabel = 'Ready';
     dmrChipColor = 'success';
-    dmrDescription = 'Integration installed, enabled, and connected.';
+    dmrDescription = `Integration configured via ${PROVISIONER_LABELS[activeProvisioner]} mode and connected.`;
   } else {
     const issues: string[] = [];
-    if (!dmrStatus.functionInstalled) {
-      issues.push('Function not installed');
-    }
-    if (dmrStatus.functionInstalled && !dmrStatus.functionEnabled) {
-      issues.push('Function disabled');
+    if (!integrationConfigured) {
+      if (activeProvisioner === 'legacy-function') {
+        if (!dmrStatus.functionInstalled) {
+          issues.push('Legacy function not installed');
+        }
+        if (dmrStatus.functionInstalled && !dmrStatus.functionEnabled) {
+          issues.push('Legacy function disabled');
+        }
+      } else {
+        issues.push('OpenAI-compatible provider not configured');
+      }
     }
     if (!dmrStatus.dockerModelRunnerConnected) {
       issues.push('Not connected to Docker Model Runner');
     }
 
     dmrStatusLabel = 'Needs Attention';
-    dmrChipColor = !dmrStatus.functionInstalled ? 'error' : 'warning';
+    dmrChipColor = !integrationConfigured ? 'error' : 'warning';
     dmrDescription = issues.length > 0 ? `${issues.join('. ')}.` : 'Integration needs attention.';
   }
 
@@ -216,6 +228,9 @@ export function ServiceManagementCard({
                 <Typography variant="subtitle2">Docker Model Runner</Typography>
                 <Typography variant="body2" color="text.secondary">
                   {dmrDescription}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Mode: {PROVISIONER_LABELS[activeProvisioner]}
                 </Typography>
               </Box>
               <Chip label={dmrStatusLabel} color={dmrChipColor} variant="filled" size="small" />

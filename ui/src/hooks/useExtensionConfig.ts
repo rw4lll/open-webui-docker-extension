@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { defaultConfigRepository } from '../services/configRepository';
 import type { ConfigRepository } from '../services/configRepository';
-import { ExtensionConfig } from '../types';
+import type { ExtensionConfig } from '../types';
 
 interface UseExtensionConfigResult {
   config: ExtensionConfig;
