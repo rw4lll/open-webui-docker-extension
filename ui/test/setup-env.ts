@@ -1,3 +1,14 @@
+import { vi } from 'vitest';
+
+vi.mock('../src/logger', () => ({
+  log: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 // Minimal globals for tests
 Object.defineProperty(global, 'fetch', {
   writable: true,

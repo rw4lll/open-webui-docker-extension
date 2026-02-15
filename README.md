@@ -34,6 +34,19 @@ Give Docker Model Runner a welcoming home inside Docker Desktop. This extension 
 
 Want to tweak the image tag or listen on another port? Adjust the settings panel before you press **Start**. The extension validates your choices and remembers them for next time.
 
+## Provisioner Mode
+
+The extension supports two ways to connect Open WebUI to Docker Model Runner:
+
+- **OpenAI-compatible (default)** – Registers DMR as an OpenAI provider via Open WebUI’s admin config. Best for recent Docker Desktop versions.
+- **Legacy Function** – Installs the bundled `docker_model_runner.py` pipeline. Use this if you use old Docker Desktop versions.
+
+Choose the mode in the settings panel. If integration fails with one mode, try the other.
+
+## Image updates and “Update & Restart”
+
+For images with floating tags (`:main` or `:latest`), the extension can check for newer digests and offer an **Update & Restart** action. When you use it, the extension pulls the updated image, recreates the container, and re-runs the Docker Model Runner integration setup. Your data stays in the extension volumes.
+
 ## See it in action
 ![Open WebUI extension dashboard showing the container ready state with a one-click launch button](screenshot-1.png)
 

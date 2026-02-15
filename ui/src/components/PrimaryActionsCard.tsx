@@ -2,6 +2,7 @@ import { OpenInNew, RocketLaunch } from '@mui/icons-material';
 import { Box, Button, Card, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
+import { PROVISIONER_LABELS } from '../constants';
 import type { ContainerState, ContainerStatus, ExtensionConfig, ServiceStatus } from '../types';
 
 interface PrimaryActionsCardProps {
@@ -13,8 +14,8 @@ interface PrimaryActionsCardProps {
   onStop: () => void;
   dmrStatus?: ServiceStatus | null;
   dmrInitializing?: boolean;
+  dmrGateMode?: 'hard' | 'soft' | 'none';
   dmrHoldOpen?: boolean;
-  dmrHoldRemainingMs?: number;
 }
 
 const STATUS_LABELS: Partial<Record<ContainerState, string>> = {
@@ -48,6 +49,7 @@ export function PrimaryActionsCard({
   onStop,
   dmrStatus,
   dmrInitializing,
+  dmrGateMode = 'none',
   dmrHoldOpen,
 }: PrimaryActionsCardProps) {
   const containerState = status?.status;
@@ -59,32 +61,42 @@ export function PrimaryActionsCard({
     containerState !== 'restarting' &&
     containerState !== 'paused';
   const effectiveConfig = status?.config ?? config;
+  const activeProvisioner = dmrStatus?.provisionerMode ?? effectiveConfig.provisioner;
 
   const dmrReady = Boolean(
     dmrStatus &&
-      dmrStatus.functionInstalled &&
-      dmrStatus.functionEnabled &&
+      (dmrStatus.integrationConfigured ??
+        (dmrStatus.functionInstalled && dmrStatus.functionEnabled)) &&
       dmrStatus.dockerModelRunnerConnected,
   );
-  const dmrSetupInProgress = isRunning && !dmrReady && (dmrInitializing || dmrHoldOpen);
-  const dmrFailed = isRunning && !dmrReady && !dmrSetupInProgress;
+  const dmrSetupBlocking = isRunning && !dmrReady && dmrGateMode === 'hard' && Boolean(dmrHoldOpen);
+  const dmrSetupBackground =
+    isRunning &&
+    !dmrReady &&
+    !dmrSetupBlocking &&
+    (dmrGateMode === 'soft' || Boolean(dmrInitializing));
+  const dmrFailed = isRunning && !dmrReady && !dmrSetupBlocking && !dmrSetupBackground;
 
   const title = isRunning
     ? dmrReady
       ? 'Open WebUI is ready'
-      : dmrSetupInProgress
+      : dmrSetupBlocking
         ? 'Finishing Docker Model Runner setup'
-        : 'Open WebUI is ready (DMR needs attention)'
+        : dmrSetupBackground
+          ? 'Open WebUI is available (DMR finalizing in background)'
+          : 'Open WebUI is ready (DMR needs attention)'
     : needsSetup
       ? 'Set up Open WebUI'
       : 'Start Open WebUI';
 
   const description = isRunning
     ? dmrReady
-      ? `Open WebUI is listening on port ${effectiveConfig.port}. Launch the interface to start using it.`
-      : dmrSetupInProgress
+      ? `Open WebUI is listening on port ${effectiveConfig.port}. Launch the interface to start using it with ${PROVISIONER_LABELS[activeProvisioner]} provisioning.`
+      : dmrSetupBlocking
         ? 'Docker Model Runner integration is finalizing. Access will be enabled once setup completes (up to one minute).'
-        : 'Docker Model Runner integration did not finish successfully. You can still open Open WebUI, but integration features may be unavailable.'
+        : dmrSetupBackground
+          ? 'Docker Model Runner integration is finalizing in the background. You can open Open WebUI now; Docker Model Runner models may take a few seconds to appear.'
+          : 'Docker Model Runner integration did not finish successfully. You can still open Open WebUI, but integration features may be unavailable.'
     : needsSetup
       ? 'Click the button to download the image and create the Open WebUI container with the current configuration.'
       : 'Start the container to make Open WebUI available with the latest saved configuration.';
@@ -148,7 +160,7 @@ export function PrimaryActionsCard({
               {loadingText}
             </Typography>
           </Box>
-        ) : dmrSetupInProgress ? (
+        ) : dmrSetupBlocking ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1 }}>
             <CircularProgress size={32} />
             <Typography variant="body1" color="text.secondary">
@@ -190,6 +202,13 @@ export function PrimaryActionsCard({
           </Stack>
         )}
 
+        {dmrSetupBackground && (
+          <Typography variant="body2" color="info.main" sx={{ textAlign: 'center', mt: 1 }}>
+            Docker Model Runner setup continues in the background. Opening now may show fewer models
+            until setup finishes.
+          </Typography>
+        )}
+
         {dmrFailed && (
           <Typography variant="body2" color="warning.main" sx={{ textAlign: 'center', mt: 1 }}>
             Docker Model Runner integration did not finish. Check the Service Management tab for
@@ -205,6 +224,8 @@ export function PrimaryActionsCard({
           <span>Image: {effectiveConfig.image}</span>
           <span>•</span>
           <span>Port: {effectiveConfig.port}</span>
+          <span>•</span>
+          <span>Provisioner: {PROVISIONER_LABELS[activeProvisioner]}</span>
           {needsStart && (
             <>
               <span>•</span>

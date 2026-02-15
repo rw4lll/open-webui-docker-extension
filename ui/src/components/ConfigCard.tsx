@@ -15,12 +15,17 @@ import {
   Divider,
   FormControlLabel,
   Switch,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useCallback, useEffect, useState } from 'react';
 
+import { PROVISIONER_CONFIG_LABELS } from '../constants';
 import { log } from '../logger';
-import type { ExtensionConfig } from '../types';
+import type { ExtensionConfig, ProvisionerMode } from '../types';
 
 interface ConfigCardProps {
   config: ExtensionConfig;
@@ -51,7 +56,8 @@ export default function ConfigCard({ config, loading, onUpdate, validateConfig }
     setHasChanges(
       newConfig.image !== config.image ||
         newConfig.port !== config.port ||
-        newConfig.autoStart !== config.autoStart,
+        newConfig.autoStart !== config.autoStart ||
+        newConfig.provisioner !== config.provisioner,
     );
     setValidationErrors(runValidation(newConfig));
   };
@@ -151,8 +157,10 @@ export default function ConfigCard({ config, loading, onUpdate, validateConfig }
               size="small"
               error={validationErrors.some((e) => e.includes('image'))}
               helperText="Open WebUI Docker image (tag is added if missing, e.g., :main)"
-              InputProps={{
-                startAdornment: <InputAdornment position="start">Image</InputAdornment>,
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start">Image</InputAdornment>,
+                },
               }}
             />
             {localConfig.image !== config.image && (
@@ -176,8 +184,10 @@ export default function ConfigCard({ config, loading, onUpdate, validateConfig }
               type="number"
               error={validationErrors.some((e) => e.includes('Port'))}
               helperText="Port to expose Open WebUI on localhost (e.g., 8090)"
-              InputProps={{
-                startAdornment: <InputAdornment position="start">Port</InputAdornment>,
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start">Port</InputAdornment>,
+                },
               }}
             />
             {localConfig.port !== config.port && (
@@ -215,6 +225,41 @@ export default function ConfigCard({ config, loading, onUpdate, validateConfig }
             )}
           </Box>
 
+          <Box>
+            <FormControl fullWidth size="small">
+              <InputLabel id="provisioner-mode-label">Provisioner Mode</InputLabel>
+              <Select
+                labelId="provisioner-mode-label"
+                label="Provisioner Mode"
+                value={localConfig.provisioner}
+                onChange={(e) =>
+                  handleLocalConfigChange({
+                    ...localConfig,
+                    provisioner: e.target.value as ProvisionerMode,
+                  })
+                }
+              >
+                <MenuItem value="openai">{PROVISIONER_CONFIG_LABELS.openai}</MenuItem>
+                <MenuItem value="legacy-function">
+                  {PROVISIONER_CONFIG_LABELS['legacy-function']}
+                </MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              OpenAI-compatible mode uses container env configuration. Legacy mode installs the
+              Docker Model Runner Open WebUI function.
+            </Typography>
+            {localConfig.provisioner !== config.provisioner && (
+              <Chip
+                label="Will recreate container"
+                color="warning"
+                size="small"
+                sx={{ mt: 1 }}
+                icon={<Refresh />}
+              />
+            )}
+          </Box>
+
           {/* Token field removed: token is managed automatically under the hood */}
         </Stack>
 
@@ -222,7 +267,8 @@ export default function ConfigCard({ config, loading, onUpdate, validateConfig }
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Current: {config.image} on port {config.port}
+            Current: {config.image} on port {config.port} (
+            {PROVISIONER_CONFIG_LABELS[config.provisioner]})
           </Typography>
           {!hasChanges && (
             <Chip label="Saved" color="success" size="small" icon={<CheckCircle />} />

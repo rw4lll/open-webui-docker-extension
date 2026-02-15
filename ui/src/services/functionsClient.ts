@@ -82,10 +82,39 @@ export class FunctionsClient {
     } catch {
       this.clearCache();
       return {
-        success: true,
-        message: 'Function installed successfully',
+        success: false,
+        message: `Unexpected install response (unparseable): ${result.slice(0, 200)}`,
         functionId: payload.id,
       };
+    }
+  }
+
+  async uninstallFunction(
+    id: string,
+    options?: {
+      throwOnError?: boolean;
+    },
+  ): Promise<boolean> {
+    try {
+      await this.http.request({
+        url: `${this.httpRequestBase()}/functions/id/${id}/delete`,
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        includeAuth: true,
+      });
+      this.clearCache();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/HTTP 404\b/i.test(message) || /not found/i.test(message)) {
+        this.clearCache();
+        return true;
+      }
+      if (options?.throwOnError) {
+        throw error;
+      }
+      log.warn(`Failed to uninstall function ${id}:`, error);
+      return false;
     }
   }
 

@@ -47,7 +47,7 @@ describe('OpenWebUIApiService auth', () => {
 
   it('obtains token on demand and caches it', async () => {
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true },
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -67,7 +67,7 @@ describe('OpenWebUIApiService httpRequest 401 handling', () => {
   it('refreshes token on 401 and retries once', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:main', port: '8090', autoStart: true },
+      { image: 'img:main', port: '8090', autoStart: true, provisioner: 'legacy-function' },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -130,7 +130,7 @@ describe('OpenWebUIApiService ensureFunctionEnabled idempotency', () => {
   it('does not toggle when already enabled', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true },
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -161,7 +161,7 @@ describe('OpenWebUIApiService ensureFunctionEnabled idempotency', () => {
   it('enables locally and globally when disabled', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true },
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -221,7 +221,7 @@ describe('OpenWebUIApiService ensureFunctionEnabled idempotency', () => {
   it('enables local flag when only global is active', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true },
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -260,5 +260,270 @@ describe('OpenWebUIApiService ensureFunctionEnabled idempotency', () => {
     const toggleLocalUrl = String(fetchMock.mock.calls[1][0]);
     expect(toggleLocalUrl).toContain(`/functions/id/${DOCKER_MODEL_RUNNER_FUNCTION_ID}/toggle`);
     expect(toggleLocalUrl).not.toContain('/global');
+  });
+});
+
+describe('OpenWebUIApiService provisioner delegation', () => {
+  it('uses verify path without mutating setup side effects', async () => {
+    const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
+    const svc = new OpenWebUIApiService(
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      undefined,
+      { authTokenStore: tokenStore },
+    );
+
+    const verifyIntegration = vi.fn().mockResolvedValue({
+      mode: 'openai',
+      containerRunning: true,
+      integrationConfigured: true,
+      dockerModelRunnerConnected: true,
+      lastChecked: Date.now(),
+      details: { modelsApiReachable: true, modelsCount: 2 },
+    });
+    const setupIntegration = vi.fn().mockResolvedValue({
+      mode: 'openai',
+      containerRunning: true,
+      integrationConfigured: true,
+      dockerModelRunnerConnected: true,
+      lastChecked: Date.now(),
+      details: { modelsApiReachable: true, modelsCount: 2 },
+    });
+    const legacyCleanup = vi.fn().mockResolvedValue(undefined);
+    const openAICleanup = vi.fn().mockResolvedValue(undefined);
+
+    (svc as any).provisionerRegistry = {
+      resolve: vi.fn().mockReturnValue({
+        verifyIntegration,
+        setupIntegration,
+        getServiceStatus: verifyIntegration,
+      }),
+      resetAllConnectivityCaches: vi.fn(),
+    };
+    (svc as any).legacyProvisioner = { cleanupInactiveArtifacts: legacyCleanup };
+    (svc as any).openAIProvisioner = { cleanupInactiveArtifacts: openAICleanup };
+
+    const result = await svc.verifyDockerModelRunnerIntegration();
+    expect(result.integrationConfigured).toBe(true);
+    expect(verifyIntegration).toHaveBeenCalledTimes(1);
+    expect(setupIntegration).not.toHaveBeenCalled();
+    expect(legacyCleanup).not.toHaveBeenCalled();
+    expect(openAICleanup).not.toHaveBeenCalled();
+  });
+
+  it('maps provisioner status into ServiceStatus', async () => {
+    const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
+    const svc = new OpenWebUIApiService(
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      undefined,
+      { authTokenStore: tokenStore },
+    );
+
+    const setupIntegration = vi.fn().mockResolvedValue({
+      mode: 'openai',
+      containerRunning: true,
+      integrationConfigured: true,
+      dockerModelRunnerConnected: true,
+      lastChecked: Date.now(),
+      details: { modelsApiReachable: true, modelsCount: 3 },
+    });
+    const verifyIntegration = vi.fn().mockResolvedValue({
+      mode: 'openai',
+      containerRunning: true,
+      integrationConfigured: false,
+      dockerModelRunnerConnected: false,
+      lastChecked: Date.now(),
+      details: { modelsApiReachable: false, modelsCount: 0 },
+    });
+
+    (svc as any).provisionerRegistry = {
+      resolve: vi.fn().mockReturnValue({
+        setupIntegration,
+        verifyIntegration,
+        getServiceStatus: verifyIntegration,
+      }),
+      resetAllConnectivityCaches: vi.fn(),
+    };
+    (svc as any).legacyProvisioner = {
+      cleanupInactiveArtifacts: vi.fn().mockResolvedValue(undefined),
+    };
+    (svc as any).openAIProvisioner = {
+      cleanupInactiveArtifacts: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const setupStatus = await svc.setupDockerModelRunnerIntegration();
+    expect(setupStatus.provisionerMode).toBe('openai');
+    expect(setupStatus.integrationConfigured).toBe(true);
+    expect(setupStatus.functionInstalled).toBe(true);
+    expect(setupStatus.functionEnabled).toBe(true);
+    expect(setupStatus.details?.modelsCount).toBe(3);
+
+    const status = await svc.getServiceStatus();
+    expect(status.provisionerMode).toBe('openai');
+    expect(status.integrationConfigured).toBe(false);
+    expect(status.functionInstalled).toBe(false);
+    expect(status.functionEnabled).toBe(false);
+    expect(verifyIntegration).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up legacy artifacts when openai provisioner is active', async () => {
+    const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
+    const svc = new OpenWebUIApiService(
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      undefined,
+      { authTokenStore: tokenStore },
+    );
+
+    const setupIntegration = vi.fn().mockResolvedValue({
+      mode: 'openai',
+      containerRunning: true,
+      integrationConfigured: true,
+      dockerModelRunnerConnected: true,
+      lastChecked: Date.now(),
+      details: {},
+    });
+    const legacyCleanup = vi.fn().mockResolvedValue(undefined);
+    const openAICleanup = vi.fn().mockResolvedValue(undefined);
+
+    (svc as any).provisionerRegistry = {
+      resolve: vi.fn().mockReturnValue({
+        setupIntegration,
+        verifyIntegration: vi.fn(),
+        getServiceStatus: vi.fn(),
+      }),
+      resetAllConnectivityCaches: vi.fn(),
+    };
+    (svc as any).legacyProvisioner = {
+      cleanupInactiveArtifacts: legacyCleanup,
+    };
+    (svc as any).openAIProvisioner = {
+      cleanupInactiveArtifacts: openAICleanup,
+    };
+
+    await svc.setupDockerModelRunnerIntegration();
+
+    expect(legacyCleanup).toHaveBeenCalledTimes(1);
+    expect(openAICleanup).not.toHaveBeenCalled();
+  });
+
+  it('cleans up openai artifacts when legacy provisioner is active', async () => {
+    const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
+    const svc = new OpenWebUIApiService(
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
+      undefined,
+      { authTokenStore: tokenStore },
+    );
+
+    const setupIntegration = vi.fn().mockResolvedValue({
+      mode: 'legacy-function',
+      containerRunning: true,
+      integrationConfigured: true,
+      dockerModelRunnerConnected: true,
+      lastChecked: Date.now(),
+      details: { functionInstalled: true, functionEnabled: true },
+    });
+    const legacyCleanup = vi.fn().mockResolvedValue(undefined);
+    const openAICleanup = vi.fn().mockResolvedValue(undefined);
+
+    (svc as any).provisionerRegistry = {
+      resolve: vi.fn().mockReturnValue({
+        setupIntegration,
+        verifyIntegration: vi.fn(),
+        getServiceStatus: vi.fn(),
+      }),
+      resetAllConnectivityCaches: vi.fn(),
+    };
+    (svc as any).legacyProvisioner = {
+      cleanupInactiveArtifacts: legacyCleanup,
+    };
+    (svc as any).openAIProvisioner = {
+      cleanupInactiveArtifacts: openAICleanup,
+    };
+
+    await svc.setupDockerModelRunnerIntegration();
+
+    expect(openAICleanup).toHaveBeenCalledTimes(1);
+    expect(legacyCleanup).not.toHaveBeenCalled();
+  });
+
+  it('skips cleanup when setup returns integrationConfigured=false', async () => {
+    const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
+    const svc = new OpenWebUIApiService(
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      undefined,
+      { authTokenStore: tokenStore },
+    );
+
+    const setupIntegration = vi.fn().mockResolvedValue({
+      mode: 'openai',
+      containerRunning: true,
+      integrationConfigured: false,
+      dockerModelRunnerConnected: false,
+      lastChecked: Date.now(),
+      details: { modelsApiReachable: false, openAIProviderConfigured: false },
+    });
+    const legacyCleanup = vi.fn().mockResolvedValue(undefined);
+    const openAICleanup = vi.fn().mockResolvedValue(undefined);
+
+    (svc as any).provisionerRegistry = {
+      resolve: vi.fn().mockReturnValue({
+        setupIntegration,
+        verifyIntegration: vi.fn(),
+        getServiceStatus: vi.fn(),
+      }),
+      resetAllConnectivityCaches: vi.fn(),
+    };
+    (svc as any).legacyProvisioner = {
+      cleanupInactiveArtifacts: legacyCleanup,
+    };
+    (svc as any).openAIProvisioner = {
+      cleanupInactiveArtifacts: openAICleanup,
+    };
+
+    const result = await svc.setupDockerModelRunnerIntegration();
+
+    expect(result.integrationConfigured).toBe(false);
+    expect(legacyCleanup).not.toHaveBeenCalled();
+    expect(openAICleanup).not.toHaveBeenCalled();
+  });
+
+  it('skips cleanup when legacy provisioner setup returns integrationConfigured=false', async () => {
+    const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
+    const svc = new OpenWebUIApiService(
+      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
+      undefined,
+      { authTokenStore: tokenStore },
+    );
+
+    const setupIntegration = vi.fn().mockResolvedValue({
+      mode: 'legacy-function',
+      containerRunning: true,
+      integrationConfigured: false,
+      dockerModelRunnerConnected: false,
+      lastChecked: Date.now(),
+      details: { functionInstalled: false, functionEnabled: false },
+    });
+    const legacyCleanup = vi.fn().mockResolvedValue(undefined);
+    const openAICleanup = vi.fn().mockResolvedValue(undefined);
+
+    (svc as any).provisionerRegistry = {
+      resolve: vi.fn().mockReturnValue({
+        setupIntegration,
+        verifyIntegration: vi.fn(),
+        getServiceStatus: vi.fn(),
+      }),
+      resetAllConnectivityCaches: vi.fn(),
+    };
+    (svc as any).legacyProvisioner = {
+      cleanupInactiveArtifacts: legacyCleanup,
+    };
+    (svc as any).openAIProvisioner = {
+      cleanupInactiveArtifacts: openAICleanup,
+    };
+
+    const result = await svc.setupDockerModelRunnerIntegration();
+
+    expect(result.integrationConfigured).toBe(false);
+    expect(legacyCleanup).not.toHaveBeenCalled();
+    expect(openAICleanup).not.toHaveBeenCalled();
   });
 });
