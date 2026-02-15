@@ -3,12 +3,7 @@ import { Box, Button, Card, Chip, CircularProgress, Stack, Typography } from '@m
 import { alpha } from '@mui/material/styles';
 
 import { PROVISIONER_LABELS } from '../constants';
-import type {
-  ContainerState,
-  ContainerStatus,
-  ExtensionConfig,
-  ServiceStatus,
-} from '../types';
+import type { ContainerState, ContainerStatus, ExtensionConfig, ServiceStatus } from '../types';
 
 interface PrimaryActionsCardProps {
   status: ContainerStatus | null;

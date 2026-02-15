@@ -65,7 +65,11 @@ describe('useDockerModelRunner', () => {
     lastChecked: Date.now(),
     integrationConfigured: false,
     provisionerMode: 'openai',
-    details: { modelsApiReachable: true, openAIProviderConfigured: false, prefixIdConfigured: false },
+    details: {
+      modelsApiReachable: true,
+      openAIProviderConfigured: false,
+      prefixIdConfigured: false,
+    },
   });
 
   beforeEach(() => {
@@ -100,9 +104,7 @@ describe('useDockerModelRunner', () => {
     let latestHook: UseDockerModelRunnerResult | null = null;
     let message: string | null = null;
 
-    const onMessage = (
-      update: string | ((prev: string | null) => string | null) | null,
-    ): void => {
+    const onMessage = (update: string | ((prev: string | null) => string | null) | null): void => {
       if (typeof update === 'function') {
         message = update(message);
         return;
@@ -164,7 +166,9 @@ describe('useDockerModelRunner', () => {
   });
 
   it('switches to hard gate and runs setup when verify is unconfigured', async () => {
-    mockService.verifyDockerModelRunnerIntegration = vi.fn().mockResolvedValue(unconfiguredStatus());
+    mockService.verifyDockerModelRunnerIntegration = vi
+      .fn()
+      .mockResolvedValue(unconfiguredStatus());
     mockService.setupDockerModelRunnerIntegration = vi.fn().mockResolvedValue(readyStatus());
     let latestHook: UseDockerModelRunnerResult | null = null;
 
@@ -244,7 +248,9 @@ describe('useDockerModelRunner', () => {
   });
 
   it('retryIntegration refreshes auth and forces setup path when verify is unconfigured', async () => {
-    mockService.verifyDockerModelRunnerIntegration = vi.fn().mockResolvedValue(unconfiguredStatus());
+    mockService.verifyDockerModelRunnerIntegration = vi
+      .fn()
+      .mockResolvedValue(unconfiguredStatus());
     mockService.setupDockerModelRunnerIntegration = vi.fn().mockResolvedValue(readyStatus());
     let latestHook: UseDockerModelRunnerResult | null = null;
 
@@ -363,7 +369,9 @@ describe('useDockerModelRunner', () => {
   });
 
   it('does not rehydrate dmr status when container stops while setup is in flight', async () => {
-    mockService.verifyDockerModelRunnerIntegration = vi.fn().mockResolvedValue(unconfiguredStatus());
+    mockService.verifyDockerModelRunnerIntegration = vi
+      .fn()
+      .mockResolvedValue(unconfiguredStatus());
     let resolveSetup: ((value: ServiceStatus) => void) | null = null;
     const setupPromise = new Promise<ServiceStatus>((resolve) => {
       resolveSetup = resolve;

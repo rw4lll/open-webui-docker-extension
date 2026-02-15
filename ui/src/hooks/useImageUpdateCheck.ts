@@ -2,10 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { IMAGE_UPDATE_FLOATING_TAG_REGEX, IMAGE_UPDATE_POLL_INTERVAL_MS } from '../constants';
 import { log } from '../logger';
-import {
-  createImageUpdateSignature,
-  defaultImageUpdateCache,
-} from '../services/imageUpdateCache';
+import { createImageUpdateSignature, defaultImageUpdateCache } from '../services/imageUpdateCache';
 import type { ContainerService } from '../services/containerService';
 import type { ContainerStatus, ExtensionConfig, ImageUpdateCheckResult } from '../types';
 import { toErrorMessage } from '../utils/dockerCliError';

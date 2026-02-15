@@ -183,7 +183,9 @@ export class OpenAIEnvProvisioner implements DMRProvisioner {
     };
   }
 
-  private async checkModelsApi(options: { useCache?: boolean } = {}): Promise<ModelsApiCheckResult> {
+  private async checkModelsApi(
+    options: { useCache?: boolean } = {},
+  ): Promise<ModelsApiCheckResult> {
     if (options.useCache) {
       const cached = this.modelsApiCache;
       if (cached && Date.now() - cached.cachedAt < DMR_STATUS_VERIFY_CACHE_TTL_MS) {
@@ -277,14 +279,14 @@ export class OpenAIEnvProvisioner implements DMRProvisioner {
 
     const record = raw as Record<string, unknown>;
     const baseUrls = Array.isArray(record.OPENAI_API_BASE_URLS)
-      ? record.OPENAI_API_BASE_URLS
-          .filter((url): url is string => typeof url === 'string')
-          .map((url) => url.trim())
+      ? record.OPENAI_API_BASE_URLS.filter((url): url is string => typeof url === 'string').map(
+          (url) => url.trim(),
+        )
       : [];
     const apiKeys = Array.isArray(record.OPENAI_API_KEYS)
-      ? record.OPENAI_API_KEYS
-          .filter((key): key is string => typeof key === 'string')
-          .map((key) => key.trim())
+      ? record.OPENAI_API_KEYS.filter((key): key is string => typeof key === 'string').map((key) =>
+          key.trim(),
+        )
       : [];
 
     const apiConfigsRaw =
@@ -391,14 +393,12 @@ export class OpenAIEnvProvisioner implements DMRProvisioner {
   }
 
   private getTargetBaseUrl(): string {
-    return this.normalizeUrl(`${this.options.dmrConfig.baseUrl}${this.options.dmrConfig.engineSuffix}`);
+    return this.normalizeUrl(
+      `${this.options.dmrConfig.baseUrl}${this.options.dmrConfig.engineSuffix}`,
+    );
   }
 
-  private padApiKeys(
-    apiKeys: string[],
-    requiredLength: number,
-    fillValue: string,
-  ): string[] {
+  private padApiKeys(apiKeys: string[], requiredLength: number, fillValue: string): string[] {
     const nextApiKeys = [...apiKeys];
     while (nextApiKeys.length < requiredLength) {
       nextApiKeys.push(fillValue);
@@ -406,7 +406,10 @@ export class OpenAIEnvProvisioner implements DMRProvisioner {
     return nextApiKeys;
   }
 
-  private hasConfiguredPrefix(config: OpenAIAdminConfigResponse, matchedIndexes: number[]): boolean {
+  private hasConfiguredPrefix(
+    config: OpenAIAdminConfigResponse,
+    matchedIndexes: number[],
+  ): boolean {
     if (matchedIndexes.length === 0) {
       return false;
     }
@@ -425,7 +428,11 @@ export class OpenAIEnvProvisioner implements DMRProvisioner {
   ): Record<string, Record<string, unknown>> {
     const nextConfigs: Record<string, Record<string, unknown>> = {};
     let nextIndex = 0;
-    for (let currentIndex = 0; currentIndex < config.OPENAI_API_BASE_URLS.length; currentIndex += 1) {
+    for (
+      let currentIndex = 0;
+      currentIndex < config.OPENAI_API_BASE_URLS.length;
+      currentIndex += 1
+    ) {
       if (removeSet.has(currentIndex)) {
         continue;
       }
@@ -442,7 +449,9 @@ export class OpenAIEnvProvisioner implements DMRProvisioner {
     return nextConfigs;
   }
 
-  private async getPrefixIdStatus(options: { useCache?: boolean } = {}): Promise<PrefixConfigStatus> {
+  private async getPrefixIdStatus(
+    options: { useCache?: boolean } = {},
+  ): Promise<PrefixConfigStatus> {
     const config = await this.fetchOpenAIConfig({ useCache: options.useCache });
     if (!config) {
       return { supported: false, endpointConfigured: false, configured: false, matchedIndexes: [] };

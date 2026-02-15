@@ -1,9 +1,4 @@
-import {
-  DEFAULT_AUTO_START,
-  DEFAULT_IMAGE,
-  DEFAULT_PORT,
-  DEFAULT_PROVISIONER,
-} from '../constants';
+import { DEFAULT_AUTO_START, DEFAULT_IMAGE, DEFAULT_PORT, DEFAULT_PROVISIONER } from '../constants';
 import { log } from '../logger';
 import type { ExtensionConfig, ProvisionerMode } from '../types';
 import { createLocalStorageAdapter, type StorageAdapter } from './storage';
@@ -260,10 +255,7 @@ export class ConfigRepository {
    * was either stored explicitly or absent from the config object.  Both cases
    * indicate an upgrade from the old default and should resolve to `openai`.
    */
-  private migrationV1(
-    config: ExtensionConfig,
-    raw: Partial<ExtensionConfig>,
-  ): ExtensionConfig {
+  private migrationV1(config: ExtensionConfig, raw: Partial<ExtensionConfig>): ExtensionConfig {
     const storedProvisioner = raw.provisioner;
 
     if (storedProvisioner === 'legacy-function' || storedProvisioner === undefined) {

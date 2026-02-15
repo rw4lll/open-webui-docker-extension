@@ -44,7 +44,8 @@ function normalizePayload(value: unknown): CachedDMRStatusPayload | null {
   }
 
   const stateHint = value.containerStateHint;
-  const containerStateHint = typeof stateHint === 'string' ? (stateHint as ContainerState) : undefined;
+  const containerStateHint =
+    typeof stateHint === 'string' ? (stateHint as ContainerState) : undefined;
 
   return {
     status: value.status,
@@ -63,10 +64,7 @@ export function createDMRConfigSignature(
 export class DMRStatusCache {
   private readonly cache: TypedStorageCache<CachedDMRStatusEntry>;
 
-  constructor(
-    storage: StorageAdapter,
-    ttlMs: number = DMR_STATUS_CACHE_TTL_MS,
-  ) {
+  constructor(storage: StorageAdapter, ttlMs: number = DMR_STATUS_CACHE_TTL_MS) {
     this.cache = new TypedStorageCache<CachedDMRStatusEntry>(storage, {
       storageKey: STORAGE_KEY,
       ttlMs,

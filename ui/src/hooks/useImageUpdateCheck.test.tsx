@@ -106,7 +106,9 @@ describe('useImageUpdateCheck', () => {
   it('uses cached result when available', async () => {
     let latestHook: UseImageUpdateCheckResult | null = null;
     const firstCheck = vi.fn().mockResolvedValue(createResult({ updateAvailable: false }));
-    const firstService = { checkImageUpdateAvailability: firstCheck } as unknown as ContainerService;
+    const firstService = {
+      checkImageUpdateAvailability: firstCheck,
+    } as unknown as ContainerService;
 
     await act(async () => {
       root.render(
@@ -133,7 +135,9 @@ describe('useImageUpdateCheck', () => {
     root = createRoot(container);
 
     const secondCheck = vi.fn().mockResolvedValue(createResult({ updateAvailable: true }));
-    const secondService = { checkImageUpdateAvailability: secondCheck } as unknown as ContainerService;
+    const secondService = {
+      checkImageUpdateAvailability: secondCheck,
+    } as unknown as ContainerService;
 
     await act(async () => {
       root.render(

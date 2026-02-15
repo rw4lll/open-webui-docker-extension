@@ -33,9 +33,12 @@ export class LegacyFunctionProvisioner implements LegacyFunctionProvisionerContr
   }
 
   async cleanupInactiveArtifacts(): Promise<void> {
-    const removed = await this.options.functions.uninstallFunction(DOCKER_MODEL_RUNNER_FUNCTION_ID, {
-      throwOnError: true,
-    });
+    const removed = await this.options.functions.uninstallFunction(
+      DOCKER_MODEL_RUNNER_FUNCTION_ID,
+      {
+        throwOnError: true,
+      },
+    );
     if (!removed) {
       throw new Error('Legacy function cleanup did not remove docker_model_runner');
     }
@@ -59,7 +62,9 @@ export class LegacyFunctionProvisioner implements LegacyFunctionProvisionerContr
         return this.withIntegrationConfigured(status);
       }
 
-      const installed = await this.options.functions.isFunctionInstalled(DOCKER_MODEL_RUNNER_FUNCTION_ID);
+      const installed = await this.options.functions.isFunctionInstalled(
+        DOCKER_MODEL_RUNNER_FUNCTION_ID,
+      );
       if (!installed) {
         const installResult = await this.installDMRFunction();
         status.details.functionInstalled = installResult.success;
@@ -71,13 +76,17 @@ export class LegacyFunctionProvisioner implements LegacyFunctionProvisionerContr
         status.details.functionInstalled = true;
       }
 
-      const functionStatus = await this.options.functions.getFunctionById(DOCKER_MODEL_RUNNER_FUNCTION_ID);
+      const functionStatus = await this.options.functions.getFunctionById(
+        DOCKER_MODEL_RUNNER_FUNCTION_ID,
+      );
       status.details.functionEnabled = this.options.functions.isFunctionActive(functionStatus);
 
       if (!status.details.functionEnabled) {
         try {
           await this.options.functions.ensureFunctionEnabled(DOCKER_MODEL_RUNNER_FUNCTION_ID, true);
-          const refreshedFn = await this.options.functions.getFunctionById(DOCKER_MODEL_RUNNER_FUNCTION_ID);
+          const refreshedFn = await this.options.functions.getFunctionById(
+            DOCKER_MODEL_RUNNER_FUNCTION_ID,
+          );
           status.details.functionEnabled = this.options.functions.isFunctionActive(refreshedFn);
           log.debug('Docker Model Runner function enabled successfully');
         } catch (error) {
@@ -110,7 +119,9 @@ export class LegacyFunctionProvisioner implements LegacyFunctionProvisionerContr
         DOCKER_MODEL_RUNNER_FUNCTION_ID,
       );
       if (status.details.functionInstalled) {
-        const functionStatus = await this.options.functions.getFunctionById(DOCKER_MODEL_RUNNER_FUNCTION_ID);
+        const functionStatus = await this.options.functions.getFunctionById(
+          DOCKER_MODEL_RUNNER_FUNCTION_ID,
+        );
         status.details.functionEnabled = this.options.functions.isFunctionActive(functionStatus);
         if (status.details.functionEnabled) {
           status.dockerModelRunnerConnected = await this.testConnectivity();

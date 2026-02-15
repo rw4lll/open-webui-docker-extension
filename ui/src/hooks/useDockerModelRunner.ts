@@ -210,10 +210,7 @@ export function useDockerModelRunner({
       }
 
       if (options.runId !== undefined) {
-        if (
-          statusRef.current?.status !== 'running' ||
-          runIdRef.current !== options.runId
-        ) {
+        if (statusRef.current?.status !== 'running' || runIdRef.current !== options.runId) {
           log.debug('DMR commit skipped - stale run (container stopped or superseded)', {
             runId: options.runId,
             currentRunId: runIdRef.current,
@@ -445,7 +442,9 @@ export function useDockerModelRunner({
 
     const cached = defaultDMRStatusCache.get(configSignature);
     const trustedCacheReady = Boolean(
-      cached && isDMRReady(cached.status) && statusMatchesProvisioner(cached.status, config.provisioner),
+      cached &&
+        isDMRReady(cached.status) &&
+        statusMatchesProvisioner(cached.status, config.provisioner),
     );
 
     trustedCacheRef.current = trustedCacheReady;

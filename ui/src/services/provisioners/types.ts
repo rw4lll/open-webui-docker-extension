@@ -70,8 +70,12 @@ export function toServiceStatus(status: ProvisionerStatus): ServiceStatus {
 
   return {
     containerRunning: status.containerRunning,
-    functionInstalled: hasFunctionInstalled ? Boolean(details.functionInstalled) : status.integrationConfigured,
-    functionEnabled: hasFunctionEnabled ? Boolean(details.functionEnabled) : status.integrationConfigured,
+    functionInstalled: hasFunctionInstalled
+      ? Boolean(details.functionInstalled)
+      : status.integrationConfigured,
+    functionEnabled: hasFunctionEnabled
+      ? Boolean(details.functionEnabled)
+      : status.integrationConfigured,
     dockerModelRunnerConnected: status.dockerModelRunnerConnected,
     lastChecked: status.lastChecked,
     integrationConfigured: status.integrationConfigured,

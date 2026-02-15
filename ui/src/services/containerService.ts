@@ -331,7 +331,10 @@ export class ContainerService {
         if (provisionerStale) {
           log.info(
             'Existing container has stale/missing provisioner label; removing for recreation',
-            { containerLabel: provisionerLabel ?? '<missing>', configProvisioner: config.provisioner },
+            {
+              containerLabel: provisionerLabel ?? '<missing>',
+              configProvisioner: config.provisioner,
+            },
           );
           try {
             if (existing.state === 'running') {

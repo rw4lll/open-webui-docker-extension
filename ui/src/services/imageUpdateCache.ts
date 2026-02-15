@@ -36,7 +36,8 @@ function normalizePayload(value: unknown): CachedImageUpdatePayload | null {
   }
 
   const checkedAt = Number(value.checkedAt);
-  const imageSignature = typeof value.imageSignature === 'string' ? value.imageSignature.trim() : '';
+  const imageSignature =
+    typeof value.imageSignature === 'string' ? value.imageSignature.trim() : '';
   if (!Number.isFinite(checkedAt) || checkedAt <= 0 || imageSignature.length === 0) {
     return null;
   }
@@ -55,10 +56,7 @@ export function createImageUpdateSignature(image: string): string {
 export class ImageUpdateCache {
   private readonly cache: TypedStorageCache<CachedImageUpdateEntry>;
 
-  constructor(
-    storage: StorageAdapter,
-    ttlMs: number = IMAGE_UPDATE_CACHE_TTL_MS,
-  ) {
+  constructor(storage: StorageAdapter, ttlMs: number = IMAGE_UPDATE_CACHE_TTL_MS) {
     this.cache = new TypedStorageCache<CachedImageUpdateEntry>(storage, {
       storageKey: STORAGE_KEY,
       ttlMs,
@@ -76,11 +74,7 @@ export class ImageUpdateCache {
     return this.cache.get(imageSignature);
   }
 
-  set(entry: {
-    result: ImageUpdateCheckResult;
-    imageSignature: string;
-    checkedAt?: number;
-  }): void {
+  set(entry: { result: ImageUpdateCheckResult; imageSignature: string; checkedAt?: number }): void {
     const checkedAt = entry.checkedAt ?? Date.now();
     const payload: CachedImageUpdatePayload = {
       result: entry.result,

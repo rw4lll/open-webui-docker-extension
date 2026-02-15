@@ -227,7 +227,10 @@ describe('ContainerService', () => {
   });
 
   it('continues container creation when floating-tag pre-pull hits transient network errors', async () => {
-    listContainersMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    listContainersMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
 
     execMock.mockImplementation(async (command, args) => {
       if (command === 'pull' && args[0] === 'ghcr.io/open-webui/open-webui:main') {
@@ -270,7 +273,9 @@ describe('ContainerService', () => {
       | string[]
       | undefined;
     expect(openAIRunArgs).toBeTruthy();
-    expect(openAIRunArgs).toContain('OPENAI_API_BASE_URLS=http://model-runner.docker.internal/engines/llama.cpp/v1');
+    expect(openAIRunArgs).toContain(
+      'OPENAI_API_BASE_URLS=http://model-runner.docker.internal/engines/llama.cpp/v1',
+    );
     expect(openAIRunArgs).toContain('OPENAI_API_KEYS=not-required');
     expect(openAIRunArgs).toContain('com.docker.extension.openwebui.provisioner=openai');
 
@@ -296,7 +301,9 @@ describe('ContainerService', () => {
   it('returns unsupported update check result for pinned tags', async () => {
     const service = createContainerService({ client });
 
-    const result = await service.checkImageUpdateAvailability('ghcr.io/open-webui/open-webui:0.5.0');
+    const result = await service.checkImageUpdateAvailability(
+      'ghcr.io/open-webui/open-webui:0.5.0',
+    );
 
     expect(result.supported).toBe(false);
     expect(result.updateAvailable).toBe(false);
@@ -310,7 +317,10 @@ describe('ContainerService', () => {
           stdout: JSON.stringify([
             {
               RepoDigests: [`ghcr.io/open-webui/open-webui@${LOCAL_DIGEST}`],
-              Descriptor: { mediaType: 'application/vnd.oci.image.index.v1+json', digest: LOCAL_DIGEST },
+              Descriptor: {
+                mediaType: 'application/vnd.oci.image.index.v1+json',
+                digest: LOCAL_DIGEST,
+              },
             },
           ]),
           stderr: '',
@@ -341,7 +351,10 @@ describe('ContainerService', () => {
           stdout: JSON.stringify([
             {
               RepoDigests: [`ghcr.io/open-webui/open-webui@${LOCAL_DIGEST}`],
-              Descriptor: { mediaType: 'application/vnd.oci.image.index.v1+json', digest: LOCAL_DIGEST },
+              Descriptor: {
+                mediaType: 'application/vnd.oci.image.index.v1+json',
+                digest: LOCAL_DIGEST,
+              },
             },
           ]),
           stderr: '',
@@ -397,7 +410,10 @@ describe('ContainerService', () => {
           stdout: JSON.stringify([
             {
               RepoDigests: [`ghcr.io/open-webui/open-webui@${LOCAL_DIGEST}`],
-              Descriptor: { mediaType: 'application/vnd.oci.image.index.v1+json', digest: LOCAL_DIGEST },
+              Descriptor: {
+                mediaType: 'application/vnd.oci.image.index.v1+json',
+                digest: LOCAL_DIGEST,
+              },
             },
           ]),
           stderr: '',
@@ -420,7 +436,9 @@ describe('ContainerService', () => {
     expect(result.localDigest).toBe(LOCAL_DIGEST);
     expect(result.error).toContain('Unable to determine remote tag digest');
     expect(
-      execMock.mock.calls.some(([command, args]) => command === 'manifest' && args[0] === 'inspect'),
+      execMock.mock.calls.some(
+        ([command, args]) => command === 'manifest' && args[0] === 'inspect',
+      ),
     ).toBe(true);
   });
 
@@ -431,7 +449,10 @@ describe('ContainerService', () => {
           stdout: JSON.stringify([
             {
               RepoDigests: [`ghcr.io/open-webui/open-webui@${LOCAL_DIGEST}`],
-              Descriptor: { mediaType: 'application/vnd.oci.image.index.v1+json', digest: LOCAL_DIGEST },
+              Descriptor: {
+                mediaType: 'application/vnd.oci.image.index.v1+json',
+                digest: LOCAL_DIGEST,
+              },
             },
           ]),
           stderr: '',
@@ -464,7 +485,9 @@ describe('ContainerService', () => {
     expect(result.localDigest).toBe(LOCAL_DIGEST);
     expect(result.remoteDigest).toBe(REMOTE_DIGEST);
     expect(
-      execMock.mock.calls.some(([command, args]) => command === 'manifest' && args[0] === 'inspect'),
+      execMock.mock.calls.some(
+        ([command, args]) => command === 'manifest' && args[0] === 'inspect',
+      ),
     ).toBe(true);
   });
 
@@ -609,7 +632,7 @@ describe('ContainerService', () => {
 
       listContainersMock
         .mockResolvedValueOnce([oldContainer]) // findContainer in createContainerInternal
-        .mockResolvedValueOnce([]);             // isHostPortInUse
+        .mockResolvedValueOnce([]); // isHostPortInUse
 
       const service = createContainerService({ client });
       await service.createContainer({
@@ -645,7 +668,7 @@ describe('ContainerService', () => {
 
       listContainersMock
         .mockResolvedValueOnce([staleContainer]) // findContainer in createContainerInternal
-        .mockResolvedValueOnce([]);               // isHostPortInUse
+        .mockResolvedValueOnce([]); // isHostPortInUse
 
       const service = createContainerService({ client });
       await service.createContainer({

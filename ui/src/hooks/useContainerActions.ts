@@ -180,7 +180,15 @@ export function useContainerActions({
       },
       { errorPrefix: 'Failed to start container' },
     );
-  }, [config, ensureIntegration, invalidateDMRCache, runAsync, scheduleStatusRefresh, service, setMessage]);
+  }, [
+    config,
+    ensureIntegration,
+    invalidateDMRCache,
+    runAsync,
+    scheduleStatusRefresh,
+    service,
+    setMessage,
+  ]);
 
   const stopContainer = useCallback(() => {
     invalidateDMRCache?.();

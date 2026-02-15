@@ -49,10 +49,7 @@ export function ServiceManagementCard({
   const integrationConfigured =
     dmrStatus?.integrationConfigured ??
     (dmrStatus ? dmrStatus.functionInstalled && dmrStatus.functionEnabled : false);
-  const dmrReady =
-    !!dmrStatus &&
-    integrationConfigured &&
-    dmrStatus.dockerModelRunnerConnected;
+  const dmrReady = !!dmrStatus && integrationConfigured && dmrStatus.dockerModelRunnerConnected;
   const dmrSetupBlocking = dmrGateMode === 'hard' && Boolean(dmrHoldOpen);
   const dmrSetupInProgress = Boolean(dmrInitializing || dmrSetupBlocking || dmrGateMode === 'soft');
 

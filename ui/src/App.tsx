@@ -28,8 +28,10 @@ const IMAGE_UPDATE_DISMISS_STORAGE_KEY = 'openwebui-extension-image-update-dismi
 export function App() {
   const containerService = useMemo(() => createContainerService(), []);
   const { config, persistConfig, validateConfig, configsEqual } = useExtensionConfig();
-  const { status, setStatus, fetchStatus, statusError, clearStatusError } =
-    useContainerStatus(config, containerService);
+  const { status, setStatus, fetchStatus, statusError, clearStatusError } = useContainerStatus(
+    config,
+    containerService,
+  );
   const { loading, message, error, setMessage, clearMessage, setError, clearError, runAsync } =
     useAsyncFeedback();
   const {
@@ -49,22 +51,21 @@ export function App() {
     updateConfig,
     updateImageAndRecreate,
     openBrowser,
-  } =
-    useContainerActions({
-      config,
-      containerService,
-      status,
-      setStatus,
-      fetchStatus,
-      runAsync,
-      setMessage,
-      setError,
-      validateConfig,
-      persistConfig,
-      configsEqual,
-      ensureIntegration,
-      invalidateDMRCache: clearCachedStatus,
-    });
+  } = useContainerActions({
+    config,
+    containerService,
+    status,
+    setStatus,
+    fetchStatus,
+    runAsync,
+    setMessage,
+    setError,
+    validateConfig,
+    persistConfig,
+    configsEqual,
+    ensureIntegration,
+    invalidateDMRCache: clearCachedStatus,
+  });
 
   useAutoStartContainer({
     autoStart: config.autoStart,
@@ -73,8 +74,11 @@ export function App() {
     startContainer,
   });
 
-  const { imageUpdate, checking: imageUpdateChecking, checkNow: checkImageUpdateNow } =
-    useImageUpdateCheck(config, status, {}, containerService);
+  const {
+    imageUpdate,
+    checking: imageUpdateChecking,
+    checkNow: checkImageUpdateNow,
+  } = useImageUpdateCheck(config, status, {}, containerService);
 
   const displayError = useMemo(() => error || statusError, [error, statusError]);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>('config');

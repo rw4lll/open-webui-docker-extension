@@ -19,7 +19,11 @@ export function getStderr(error: unknown): string | undefined {
 }
 
 export function toErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === 'string' && error.message.trim().length > 0) {
+  if (
+    error instanceof Error &&
+    typeof error.message === 'string' &&
+    error.message.trim().length > 0
+  ) {
     return error.message.trim();
   }
 
