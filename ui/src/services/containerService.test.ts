@@ -148,6 +148,11 @@ describe('ContainerService', () => {
       Image: 'ghcr.io/open-webui/open-webui:main',
       State: 'exited',
       Status: 'Exited (1) 2 hours ago',
+      Labels: {
+        'com.docker.extension.openwebui': 'true',
+        'com.docker.extension.openwebui.role': 'service',
+        'com.docker.extension.openwebui.provisioner': 'openai',
+      },
       Ports: [],
       Created: Date.now(),
     } as DockerListedContainer;
@@ -185,6 +190,11 @@ describe('ContainerService', () => {
       Image: 'ghcr.io/open-webui/open-webui:main',
       State: 'exited',
       Status: 'Exited (0) 10 seconds ago',
+      Labels: {
+        'com.docker.extension.openwebui': 'true',
+        'com.docker.extension.openwebui.role': 'service',
+        'com.docker.extension.openwebui.provisioner': 'openai',
+      },
       Ports: [],
       Created: Date.now(),
     } as DockerListedContainer;
@@ -484,5 +494,204 @@ describe('ContainerService', () => {
     await service.pullImage('ghcr.io/open-webui/open-webui:main');
 
     expect(execMock).toHaveBeenCalledWith('pull', ['ghcr.io/open-webui/open-webui:main']);
+  });
+
+  describe('needsProvisionerReconciliation', () => {
+    it('returns false when no container exists', async () => {
+      listContainersMock.mockResolvedValue([]);
+      const service = createContainerService({ client });
+      const result = await service.needsProvisionerReconciliation({
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      });
+      expect(result).toBe(false);
+    });
+
+    it('returns true when container has no provisioner label (old version)', async () => {
+      const oldContainer: DockerListedContainer = {
+        Id: 'old123',
+        Names: ['/openwebui-extension-service'],
+        Image: 'ghcr.io/open-webui/open-webui:main',
+        State: 'exited',
+        Status: 'Exited (0)',
+        Labels: {
+          'com.docker.extension.openwebui': 'true',
+          'com.docker.extension.openwebui.role': 'service',
+          // No provisioner label — simulates the old extension version.
+        },
+        Ports: [],
+        Created: Date.now(),
+      };
+      listContainersMock.mockResolvedValue([oldContainer]);
+
+      const service = createContainerService({ client });
+      const result = await service.needsProvisionerReconciliation({
+        image: 'ghcr.io/open-webui/open-webui:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      });
+      expect(result).toBe(true);
+    });
+
+    it('returns true when container provisioner label mismatches config', async () => {
+      const container: DockerListedContainer = {
+        Id: 'mismatch123',
+        Names: ['/openwebui-extension-service'],
+        Image: 'ghcr.io/open-webui/open-webui:main',
+        State: 'running',
+        Status: 'Up',
+        Labels: {
+          'com.docker.extension.openwebui': 'true',
+          'com.docker.extension.openwebui.role': 'service',
+          'com.docker.extension.openwebui.provisioner': 'legacy-function',
+        },
+        Ports: [],
+        Created: Date.now(),
+      };
+      listContainersMock.mockResolvedValue([container]);
+
+      const service = createContainerService({ client });
+      const result = await service.needsProvisionerReconciliation({
+        image: 'ghcr.io/open-webui/open-webui:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      });
+      expect(result).toBe(true);
+    });
+
+    it('returns false when container provisioner label matches config', async () => {
+      const container: DockerListedContainer = {
+        Id: 'match123',
+        Names: ['/openwebui-extension-service'],
+        Image: 'ghcr.io/open-webui/open-webui:main',
+        State: 'running',
+        Status: 'Up',
+        Labels: {
+          'com.docker.extension.openwebui': 'true',
+          'com.docker.extension.openwebui.role': 'service',
+          'com.docker.extension.openwebui.provisioner': 'openai',
+        },
+        Ports: [],
+        Created: Date.now(),
+      };
+      listContainersMock.mockResolvedValue([container]);
+
+      const service = createContainerService({ client });
+      const result = await service.needsProvisionerReconciliation({
+        image: 'ghcr.io/open-webui/open-webui:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      });
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('createContainerInternal – provisioner reconciliation', () => {
+    it('removes and recreates container when provisioner label is missing', async () => {
+      const oldContainer: DockerListedContainer = {
+        Id: 'old-no-label',
+        Names: ['/openwebui-extension-service'],
+        Image: 'ghcr.io/open-webui/open-webui:main',
+        State: 'exited',
+        Status: 'Exited (0)',
+        Labels: {
+          'com.docker.extension.openwebui': 'true',
+          'com.docker.extension.openwebui.role': 'service',
+        },
+        Ports: [],
+        Created: Date.now(),
+      };
+
+      listContainersMock
+        .mockResolvedValueOnce([oldContainer]) // findContainer in createContainerInternal
+        .mockResolvedValueOnce([]);             // isHostPortInUse
+
+      const service = createContainerService({ client });
+      await service.createContainer({
+        image: 'ghcr.io/open-webui/open-webui:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      });
+
+      // Should have removed the old container.
+      expect(execMock).toHaveBeenCalledWith('rm', ['-f', 'old-no-label']);
+      // Should NOT have tried to start the old container.
+      expect(execMock).not.toHaveBeenCalledWith('start', ['old-no-label']);
+      // Should have created a new container via docker run.
+      expect(execMock.mock.calls.some(([cmd]) => cmd === 'run')).toBe(true);
+    });
+
+    it('removes running container with stale provisioner label and recreates', async () => {
+      const staleContainer: DockerListedContainer = {
+        Id: 'stale-running',
+        Names: ['/openwebui-extension-service'],
+        Image: 'ghcr.io/open-webui/open-webui:main',
+        State: 'running',
+        Status: 'Up 2 hours',
+        Labels: {
+          'com.docker.extension.openwebui': 'true',
+          'com.docker.extension.openwebui.role': 'service',
+          'com.docker.extension.openwebui.provisioner': 'legacy-function',
+        },
+        Ports: [{ PrivatePort: 8080, PublicPort: 8090 }],
+        Created: Date.now(),
+      };
+
+      listContainersMock
+        .mockResolvedValueOnce([staleContainer]) // findContainer in createContainerInternal
+        .mockResolvedValueOnce([]);               // isHostPortInUse
+
+      const service = createContainerService({ client });
+      await service.createContainer({
+        image: 'ghcr.io/open-webui/open-webui:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      });
+
+      // Should have stopped and removed the stale container.
+      expect(execMock).toHaveBeenCalledWith('stop', ['stale-running']);
+      expect(execMock).toHaveBeenCalledWith('rm', ['-f', 'stale-running']);
+      // Should have created a new container.
+      expect(execMock.mock.calls.some(([cmd]) => cmd === 'run')).toBe(true);
+    });
+
+    it('starts existing container normally when provisioner label matches', async () => {
+      const matchingContainer: DockerListedContainer = {
+        Id: 'matching-stopped',
+        Names: ['/openwebui-extension-service'],
+        Image: 'ghcr.io/open-webui/open-webui:main',
+        State: 'exited',
+        Status: 'Exited (0)',
+        Labels: {
+          'com.docker.extension.openwebui': 'true',
+          'com.docker.extension.openwebui.role': 'service',
+          'com.docker.extension.openwebui.provisioner': 'openai',
+        },
+        Ports: [],
+        Created: Date.now(),
+      };
+
+      listContainersMock.mockResolvedValue([matchingContainer]);
+
+      const service = createContainerService({ client });
+      await service.createContainer({
+        image: 'ghcr.io/open-webui/open-webui:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      });
+
+      // Should have started the existing container without removing it.
+      expect(execMock).toHaveBeenCalledWith('start', ['matching-stopped']);
+      expect(execMock).not.toHaveBeenCalledWith('rm', ['-f', 'matching-stopped']);
+      expect(execMock.mock.calls.some(([cmd]) => cmd === 'run')).toBe(false);
+    });
   });
 });

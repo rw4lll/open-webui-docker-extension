@@ -317,20 +317,47 @@ export class ContainerService {
       const existing = await this.findContainer();
       if (existing) {
         log.debug('Found existing container:', existing);
-        if (existing.state === 'running') {
-          log.debug('Existing container already running; no action');
-          return;
-        }
-        try {
-          await client.docker.cli.exec('start', [existing.id]);
-          log.debug('Started existing container');
-          return;
-        } catch (startErr) {
-          log.warn('Failed to start existing container, will attempt recreate:', startErr);
+
+        // Defense-in-depth: if the existing container was created by an older
+        // extension version (no provisioner label) or with a different
+        // provisioner, remove it so we can recreate with the correct config.
+        const provisionerLabel = existing.labels?.[PROVISIONER_LABEL_KEY];
+        const provisionerStale =
+          provisionerLabel === undefined ||
+          provisionerLabel === null ||
+          provisionerLabel === '' ||
+          provisionerLabel !== config.provisioner;
+
+        if (provisionerStale) {
+          log.info(
+            'Existing container has stale/missing provisioner label; removing for recreation',
+            { containerLabel: provisionerLabel ?? '<missing>', configProvisioner: config.provisioner },
+          );
           try {
+            if (existing.state === 'running') {
+              await client.docker.cli.exec('stop', [existing.id]);
+            }
             await client.docker.cli.exec('rm', ['-f', existing.id]);
           } catch (rmErr) {
-            log.warn('Failed to remove existing container during recreate:', rmErr);
+            log.warn('Failed to remove stale container; will attempt creation anyway:', rmErr);
+          }
+          // Fall through to create a fresh container below.
+        } else {
+          if (existing.state === 'running') {
+            log.debug('Existing container already running; no action');
+            return;
+          }
+          try {
+            await client.docker.cli.exec('start', [existing.id]);
+            log.debug('Started existing container');
+            return;
+          } catch (startErr) {
+            log.warn('Failed to start existing container, will attempt recreate:', startErr);
+            try {
+              await client.docker.cli.exec('rm', ['-f', existing.id]);
+            } catch (rmErr) {
+              log.warn('Failed to remove existing container during recreate:', rmErr);
+            }
           }
         }
       }
@@ -719,6 +746,31 @@ export class ContainerService {
         provisioner,
       },
     };
+  }
+
+  /**
+   * Returns `true` when the existing container was created with a different
+   * provisioner (or no provisioner label at all, indicating an old-version
+   * container) compared to `config.provisioner`.
+   *
+   * Use this to decide whether the container needs recreation on start.
+   */
+  async needsProvisionerReconciliation(config: ExtensionConfig): Promise<boolean> {
+    const container = await this.findContainer();
+    if (!container) {
+      return false;
+    }
+
+    const labels = container.labels ?? {};
+    const labelValue = labels[PROVISIONER_LABEL_KEY];
+
+    // Old container without the provisioner label → always needs reconciliation.
+    if (labelValue === undefined || labelValue === null || labelValue === '') {
+      return true;
+    }
+
+    // Explicit mismatch between container label and desired config.
+    return labelValue !== config.provisioner;
   }
 
   private resolveProvisionerFromLabels(labels?: Record<string, string>): ProvisionerMode {

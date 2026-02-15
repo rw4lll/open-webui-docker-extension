@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import { ConfigRepository } from './configRepository';
-import { createInMemoryStorageAdapter } from './storage';
+import { createInMemoryStorageAdapter, type StorageAdapter } from './storage';
 
 describe('ConfigRepository', () => {
   let repository: ConfigRepository;
@@ -42,5 +42,128 @@ describe('ConfigRepository', () => {
     expect(loaded.image).toBe('img:tag');
     expect(loaded.port).toBe('8090');
     expect(loaded.provisioner).toBe('legacy-function');
+  });
+});
+
+describe('ConfigRepository – upgrade migration', () => {
+  const CONFIG_KEY = 'openwebui-extension-config';
+  const MIGRATION_KEY = 'openwebui-extension-config-migration-version';
+
+  /**
+   * Simulate an old-version localStorage by writing a raw config JSON
+   * directly (the way the old code would have persisted it) and ensuring
+   * the migration marker does NOT exist.
+   */
+  function seedOldConfig(storage: StorageAdapter, raw: Record<string, unknown>): void {
+    storage.setItem(CONFIG_KEY, JSON.stringify(raw));
+    // Ensure no migration marker — simulates pre-v0.2 state.
+    storage.removeItem(MIGRATION_KEY);
+  }
+
+  it('migrates config without provisioner field to openai on first load', () => {
+    const storage = createInMemoryStorageAdapter();
+    // Old version stored {image, port, autoStart} with NO provisioner field.
+    seedOldConfig(storage, {
+      image: 'ghcr.io/open-webui/open-webui:main',
+      port: '8090',
+      autoStart: true,
+    });
+
+    const repo = new ConfigRepository(storage);
+    const loaded = repo.loadConfig();
+
+    expect(loaded.provisioner).toBe('openai');
+    // Other fields should be preserved.
+    expect(loaded.image).toBe('ghcr.io/open-webui/open-webui:main');
+    expect(loaded.port).toBe('8090');
+    expect(loaded.autoStart).toBe(true);
+  });
+
+  it('migrates config with legacy-function provisioner to openai on first load', () => {
+    const storage = createInMemoryStorageAdapter();
+    // Hypothetical case: stored config explicitly has legacy-function.
+    seedOldConfig(storage, {
+      image: 'ghcr.io/open-webui/open-webui:main',
+      port: '9000',
+      autoStart: false,
+      provisioner: 'legacy-function',
+    });
+
+    const repo = new ConfigRepository(storage);
+    const loaded = repo.loadConfig();
+
+    expect(loaded.provisioner).toBe('openai');
+    expect(loaded.port).toBe('9000');
+    expect(loaded.autoStart).toBe(false);
+  });
+
+  it('does not re-migrate after migration marker is set', () => {
+    const storage = createInMemoryStorageAdapter();
+    seedOldConfig(storage, {
+      image: 'ghcr.io/open-webui/open-webui:main',
+      port: '8090',
+      autoStart: true,
+    });
+
+    const repo = new ConfigRepository(storage);
+    // First load triggers migration.
+    const first = repo.loadConfig();
+    expect(first.provisioner).toBe('openai');
+
+    // Manually revert provisioner to legacy-function and save —
+    // simulates user explicitly choosing it in the new UI.
+    repo.saveConfig({ ...first, provisioner: 'legacy-function' });
+
+    // Second load should NOT re-migrate because migration marker is set.
+    const second = repo.loadConfig();
+    expect(second.provisioner).toBe('legacy-function');
+  });
+
+  it('preserves openai provisioner from existing new-version config', () => {
+    const storage = createInMemoryStorageAdapter();
+    // Already a new-version config with openai and migration marker set.
+    storage.setItem(
+      CONFIG_KEY,
+      JSON.stringify({
+        image: 'ghcr.io/open-webui/open-webui:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+      }),
+    );
+    storage.setItem(MIGRATION_KEY, '1');
+
+    const repo = new ConfigRepository(storage);
+    const loaded = repo.loadConfig();
+
+    expect(loaded.provisioner).toBe('openai');
+  });
+
+  it('sets migration marker on fresh install (no stored config)', () => {
+    const storage = createInMemoryStorageAdapter();
+    const repo = new ConfigRepository(storage);
+    const loaded = repo.loadConfig();
+
+    expect(loaded.provisioner).toBe('openai');
+    // Migration marker should be set, so future saves of legacy-function
+    // would NOT be migrated.
+    expect(storage.getItem(MIGRATION_KEY)).toBe('1');
+  });
+
+  it('persists migrated config to storage during migration', () => {
+    const storage = createInMemoryStorageAdapter();
+    seedOldConfig(storage, {
+      image: 'custom/image:v1',
+      port: '3000',
+      autoStart: true,
+    });
+
+    const repo = new ConfigRepository(storage);
+    repo.loadConfig();
+
+    // Verify the migrated config was persisted back to storage.
+    const raw = JSON.parse(storage.getItem(CONFIG_KEY)!) as Record<string, unknown>;
+    expect(raw.provisioner).toBe('openai');
+    expect(raw.image).toBe('custom/image:v1');
   });
 });

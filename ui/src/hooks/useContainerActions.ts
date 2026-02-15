@@ -155,8 +155,21 @@ export function useContainerActions({
 
             await ensureIntegration({ force: true });
           } else {
-            await service.startContainer();
-            setMessage('Container started successfully');
+            // Detect containers created by an older extension version (missing
+            // provisioner label) or with a different provisioner than the
+            // current config.  In either case, the container must be recreated
+            // so the correct env-vars and labels are applied.
+            const needsRecreation = await service.needsProvisionerReconciliation(config);
+            if (needsRecreation) {
+              log.info('Container provisioner mismatch detected; recreating container');
+              setMessage('Upgrading container configuration...');
+              await service.recreateContainer(config);
+              setMessage('Container recreated with updated configuration');
+              await ensureIntegration({ force: true });
+            } else {
+              await service.startContainer();
+              setMessage('Container started successfully');
+            }
           }
 
           scheduleStatusRefresh(1000);

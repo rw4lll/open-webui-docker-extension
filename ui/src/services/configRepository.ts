@@ -10,6 +10,13 @@ import { createLocalStorageAdapter, type StorageAdapter } from './storage';
 
 const STORAGE_KEY = 'openwebui-extension-config';
 const HISTORY_KEY = `${STORAGE_KEY}-history`;
+const MIGRATION_VERSION_KEY = `${STORAGE_KEY}-migration-version`;
+
+/**
+ * Current migration schema version. Bump this when adding new migrations.
+ * v1: Migrate default provisioner from legacy-function → openai.
+ */
+const CURRENT_MIGRATION_VERSION = 1;
 
 const IMAGE_REGEX =
   /^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?::[0-9]+)?\/)?(?:[a-z0-9]+(?:[._-][a-z0-9]+)*\/)*[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[a-zA-Z0-9][a-zA-Z0-9._-]*)?$/;
@@ -84,13 +91,16 @@ export class ConfigRepository {
     try {
       const savedConfig = this.storage.getItem(STORAGE_KEY);
       if (savedConfig) {
-        const parsed = JSON.parse(savedConfig) as ExtensionConfig;
-        return this.validateAndNormalize(parsed);
+        const raw = JSON.parse(savedConfig) as Partial<ExtensionConfig>;
+        const normalized = this.validateAndNormalize(raw as ExtensionConfig);
+        return this.applyMigrations(normalized, raw);
       }
     } catch (error) {
       log.warn('Failed to load config from storage:', error);
     }
 
+    // Fresh install — mark all migrations as complete so they don't run later.
+    this.setMigrationVersion(CURRENT_MIGRATION_VERSION);
     return { ...DEFAULT_CONFIG };
   }
 
@@ -98,6 +108,9 @@ export class ConfigRepository {
     try {
       const normalizedConfig = this.validateAndNormalize(config);
       this.storage.setItem(STORAGE_KEY, JSON.stringify(normalizedConfig));
+      // Mark migrations as applied: any config persisted by the current code
+      // version must not be re-migrated on the next load.
+      this.setMigrationVersion(CURRENT_MIGRATION_VERSION);
     } catch (error) {
       log.error('Failed to save config to storage:', error);
       throw new Error(`Failed to save configuration: ${error}`);
@@ -203,6 +216,84 @@ export class ConfigRepository {
       this.storage.setItem(HISTORY_KEY, JSON.stringify(trimmedHistory));
     } catch (error) {
       log.warn('Failed to save config to history:', error);
+    }
+  }
+
+  /**
+   * Run any pending config migrations on the loaded config.
+   *
+   * `raw` is the un-normalized JSON that was stored, so we can inspect the
+   * original provisioner value (which may be absent in old schemas).
+   */
+  private applyMigrations(
+    normalized: ExtensionConfig,
+    raw: Partial<ExtensionConfig>,
+  ): ExtensionConfig {
+    const storedVersion = this.getMigrationVersion();
+
+    // Already up-to-date — nothing to do.
+    if (storedVersion >= CURRENT_MIGRATION_VERSION) {
+      return normalized;
+    }
+
+    let migrated = { ...normalized };
+
+    if (storedVersion < 1) {
+      migrated = this.migrationV1(migrated, raw);
+    }
+
+    // Persist the migrated config and bump the version marker.
+    try {
+      this.saveConfig(migrated);
+      this.setMigrationVersion(CURRENT_MIGRATION_VERSION);
+    } catch (error) {
+      log.warn('Failed to persist migrated config:', error);
+    }
+
+    return migrated;
+  }
+
+  /**
+   * Migration v1 — switch the default provisioner from legacy-function to openai.
+   *
+   * In the old extension version, `legacy-function` was the only provisioner and
+   * was either stored explicitly or absent from the config object.  Both cases
+   * indicate an upgrade from the old default and should resolve to `openai`.
+   */
+  private migrationV1(
+    config: ExtensionConfig,
+    raw: Partial<ExtensionConfig>,
+  ): ExtensionConfig {
+    const storedProvisioner = raw.provisioner;
+
+    if (storedProvisioner === 'legacy-function' || storedProvisioner === undefined) {
+      log.info(
+        `Config migration v1: provisioner "${String(storedProvisioner)}" → "${DEFAULT_PROVISIONER}" (new default)`,
+      );
+      return { ...config, provisioner: DEFAULT_PROVISIONER };
+    }
+
+    return config;
+  }
+
+  private getMigrationVersion(): number {
+    try {
+      const raw = this.storage.getItem(MIGRATION_VERSION_KEY);
+      if (raw !== null) {
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+    } catch {
+      // Ignore read errors; treat as version 0.
+    }
+    return 0;
+  }
+
+  private setMigrationVersion(version: number): void {
+    try {
+      this.storage.setItem(MIGRATION_VERSION_KEY, String(version));
+    } catch {
+      log.warn('Failed to persist config migration version');
     }
   }
 }
