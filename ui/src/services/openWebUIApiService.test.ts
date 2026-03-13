@@ -47,7 +47,13 @@ describe('OpenWebUIApiService auth', () => {
 
   it('obtains token on demand and caches it', async () => {
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -67,7 +73,13 @@ describe('OpenWebUIApiService httpRequest 401 handling', () => {
   it('refreshes token on 401 and retries once', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:main', port: '8090', autoStart: true, provisioner: 'legacy-function' },
+      {
+        image: 'img:main',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'legacy-function',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -130,7 +142,13 @@ describe('OpenWebUIApiService ensureFunctionEnabled idempotency', () => {
   it('does not toggle when already enabled', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'legacy-function',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -161,7 +179,13 @@ describe('OpenWebUIApiService ensureFunctionEnabled idempotency', () => {
   it('enables locally and globally when disabled', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'legacy-function',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -221,7 +245,13 @@ describe('OpenWebUIApiService ensureFunctionEnabled idempotency', () => {
   it('enables local flag when only global is active', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'legacy-function',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -267,7 +297,13 @@ describe('OpenWebUIApiService provisioner delegation', () => {
   it('uses verify path without mutating setup side effects', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -313,7 +349,13 @@ describe('OpenWebUIApiService provisioner delegation', () => {
   it('maps provisioner status into ServiceStatus', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -368,7 +410,13 @@ describe('OpenWebUIApiService provisioner delegation', () => {
   it('cleans up legacy artifacts when openai provisioner is active', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -408,7 +456,13 @@ describe('OpenWebUIApiService provisioner delegation', () => {
   it('cleans up openai artifacts when legacy provisioner is active', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'legacy-function',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -448,7 +502,13 @@ describe('OpenWebUIApiService provisioner delegation', () => {
   it('skips cleanup when setup returns integrationConfigured=false', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'openai' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'openai',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );
@@ -489,7 +549,13 @@ describe('OpenWebUIApiService provisioner delegation', () => {
   it('skips cleanup when legacy provisioner setup returns integrationConfigured=false', async () => {
     const tokenStore = new AuthTokenStore(createInMemoryStorageAdapter());
     const svc = new OpenWebUIApiService(
-      { image: 'img:tag', port: '8090', autoStart: true, provisioner: 'legacy-function' },
+      {
+        image: 'img:tag',
+        port: '8090',
+        autoStart: true,
+        provisioner: 'legacy-function',
+        enableDockerMcpToolkit: true,
+      },
       undefined,
       { authTokenStore: tokenStore },
     );

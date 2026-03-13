@@ -12,6 +12,7 @@ import { useAsyncFeedback } from './hooks/useAsyncFeedback';
 import { useContainerStatus } from './hooks/useContainerStatus';
 import { useContainerActions } from './hooks/useContainerActions';
 import { useDockerModelRunner } from './hooks/useDockerModelRunner';
+import { useDockerMcpToolkit } from './hooks/useDockerMcpToolkit';
 import { useDmrWarmupGate } from './hooks/useDmrWarmupGate';
 import { useExtensionConfig } from './hooks/useExtensionConfig';
 import { useAutoStartContainer } from './hooks/useAutoStartContainer';
@@ -35,6 +36,7 @@ export function App() {
   const { loading, message, error, setMessage, clearMessage, setError, clearError, runAsync } =
     useAsyncFeedback();
   const {
+    service: apiService,
     initializing: dmrInitializing,
     dmrStatus,
     gateMode: dmrGateMode,
@@ -42,6 +44,18 @@ export function App() {
     retryIntegration,
     clearCachedStatus,
   } = useDockerModelRunner({ config, status, onMessage: setMessage });
+  const {
+    initializing: mcpToolkitInitializing,
+    manualSyncing: mcpToolkitManualSyncing,
+    mcpStatus,
+    retryIntegration: retryMcpToolkitIntegration,
+    syncServers: syncMcpToolkitServers,
+    clearCachedStatus: clearMcpToolkitCachedStatus,
+  } = useDockerMcpToolkit({
+    config,
+    status,
+    service: apiService,
+  });
   const ddClient = useMemo(() => getDDClient(), []);
 
   const {
@@ -65,6 +79,7 @@ export function App() {
     configsEqual,
     ensureIntegration,
     invalidateDMRCache: clearCachedStatus,
+    invalidateMcpToolkitCache: clearMcpToolkitCachedStatus,
   });
 
   useAutoStartContainer({
@@ -119,6 +134,35 @@ export function App() {
   const handleRetryDMR = useCallback(() => {
     void retryIntegration();
   }, [retryIntegration]);
+
+  const handleRetryMcpToolkit = useCallback(() => {
+    void retryMcpToolkitIntegration();
+  }, [retryMcpToolkitIntegration]);
+
+  const handleSyncMcpToolkit = useCallback(() => {
+    void runAsync(
+      async () => {
+        const result = await syncMcpToolkitServers();
+        if (result.outcome === 'synced') {
+          setMessage('Docker MCP Toolkit servers synchronized from host.');
+          return;
+        }
+
+        if (result.reason === 'container-not-running') {
+          setMessage('Start the container before syncing Docker MCP Toolkit servers.');
+          return;
+        }
+        if (result.reason === 'disabled') {
+          setMessage('Enable Docker MCP Toolkit integration before syncing servers.');
+          return;
+        }
+        setMessage('Docker MCP Toolkit service is not available yet. Try again in a moment.');
+      },
+      {
+        errorPrefix: 'Failed to synchronize Docker MCP Toolkit servers',
+      },
+    );
+  }, [runAsync, setMessage, syncMcpToolkitServers]);
 
   const handleUpdateAndRestart = useCallback(() => {
     void (async () => {
@@ -244,6 +288,9 @@ export function App() {
                 config={config}
                 loading={loading}
                 onUpdate={updateConfig}
+                onSyncDockerMcpToolkit={handleSyncMcpToolkit}
+                syncingDockerMcpToolkit={mcpToolkitManualSyncing}
+                canSyncDockerMcpToolkit={status?.status === 'running'}
                 validateConfig={validateConfig}
               />
             ) : (
@@ -254,10 +301,13 @@ export function App() {
                 dmrStatus={dmrStatus}
                 dmrGateMode={dmrGateMode}
                 dmrHoldOpen={dmrHoldOpen}
+                mcpToolkitInitializing={mcpToolkitInitializing}
+                mcpToolkitStatus={mcpStatus}
                 onStart={startContainer}
                 onStop={stopContainer}
                 onRestart={restartContainer}
                 onRetryDMR={handleRetryDMR}
+                onRetryMcpToolkit={handleRetryMcpToolkit}
               />
             )}
           </Box>

@@ -33,6 +33,7 @@ describe('ContainerService', () => {
       port: '8090',
       autoStart: true,
       provisioner: 'openai' as const,
+      enableDockerMcpToolkit: true,
     };
 
     const first = service.createContainer(config);
@@ -60,6 +61,7 @@ describe('ContainerService', () => {
       port: '8090',
       autoStart: true,
       provisioner: 'openai' as const,
+      enableDockerMcpToolkit: true,
     };
 
     await expect(service.createContainer(config)).rejects.toThrow('Failed to create container');
@@ -82,6 +84,7 @@ describe('ContainerService', () => {
       port: '8090',
       autoStart: true,
       provisioner: 'openai',
+      enableDockerMcpToolkit: true,
     });
 
     const autoRunArgs = execMock.mock.calls.find(
@@ -98,6 +101,7 @@ describe('ContainerService', () => {
       port: '8091',
       autoStart: false,
       provisioner: 'openai',
+      enableDockerMcpToolkit: true,
     });
 
     const manualRunArgs = execMock.mock.calls.find(
@@ -135,6 +139,7 @@ describe('ContainerService', () => {
       port: '8090',
       autoStart: true,
       provisioner: 'openai' as const,
+      enableDockerMcpToolkit: true,
     };
 
     await expect(service.createContainer(config)).rejects.toThrow(/Port 8090 is already in use/);
@@ -175,6 +180,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       }),
     ).resolves.toBeUndefined();
 
@@ -218,6 +224,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       }),
     ).resolves.toBeUndefined();
 
@@ -246,6 +253,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       }),
     ).resolves.toBeUndefined();
 
@@ -267,6 +275,7 @@ describe('ContainerService', () => {
       port: '8090',
       autoStart: true,
       provisioner: 'openai',
+      enableDockerMcpToolkit: true,
     });
 
     const openAIRunArgs = execMock.mock.calls.find(([command]) => command === 'run')?.[1] as
@@ -287,6 +296,7 @@ describe('ContainerService', () => {
       port: '8091',
       autoStart: true,
       provisioner: 'legacy-function',
+      enableDockerMcpToolkit: true,
     });
 
     const legacyRunArgs = execMock.mock.calls.find(([command]) => command === 'run')?.[1] as
@@ -528,6 +538,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       });
       expect(result).toBe(false);
     });
@@ -555,6 +566,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       });
       expect(result).toBe(true);
     });
@@ -582,6 +594,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       });
       expect(result).toBe(true);
     });
@@ -609,6 +622,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       });
       expect(result).toBe(false);
     });
@@ -640,6 +654,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       });
 
       // Should have removed the old container.
@@ -676,6 +691,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       });
 
       // Should have stopped and removed the stale container.
@@ -709,6 +725,7 @@ describe('ContainerService', () => {
         port: '8090',
         autoStart: true,
         provisioner: 'openai',
+        enableDockerMcpToolkit: true,
       });
 
       // Should have started the existing container without removing it.

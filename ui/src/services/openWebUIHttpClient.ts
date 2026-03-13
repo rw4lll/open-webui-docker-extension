@@ -1,5 +1,6 @@
 import { log } from '../logger';
 import type { ExtensionConfig } from '../types';
+import { toErrorMessage } from '../utils/dockerCliError';
 import { retryWithBackoff, buildBackoffDelays } from '../utils/retry';
 import { getDDClient, type DockerDesktopClient } from './dockerDesktopClient';
 import type { AuthTokenStore } from './authTokenStore';
@@ -226,9 +227,7 @@ export class OpenWebUIHttpClient {
         delays: this.retryDelays,
         errorFactory: (lastError) =>
           new Error(
-            `execInContainer failed after ${attempts} attempts: ${
-              lastError instanceof Error ? lastError.message : String(lastError)
-            }`,
+            `execInContainer failed after ${attempts} attempts: ${toErrorMessage(lastError)}`,
           ),
       },
     );

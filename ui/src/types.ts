@@ -19,6 +19,7 @@ export interface ExtensionConfig {
   port: string;
   autoStart: boolean;
   provisioner: ProvisionerMode;
+  enableDockerMcpToolkit: boolean;
 }
 
 export interface ContainerStatus {
@@ -99,6 +100,39 @@ export interface ServiceStatus {
   integrationConfigured?: boolean;
   provisionerMode?: ProvisionerMode;
   details?: ServiceStatusDetails;
+}
+
+export type DockerMcpToolkitProbeSource = 'manual-instructions' | 'deterministic';
+
+export type DockerMcpToolkitUnsupportedReason =
+  | 'docker-desktop-not-running'
+  | 'mcp-cli-unavailable'
+  | 'toolkit-disabled'
+  | 'default-profile-missing'
+  | 'gateway-unreachable'
+  | 'openwebui-unsupported'
+  | 'unknown';
+
+export interface DockerMcpToolkitStatusDetails {
+  profileId?: string;
+  probeSource?: DockerMcpToolkitProbeSource;
+  unsupportedReason?: DockerMcpToolkitUnsupportedReason;
+  diagnostics?: string;
+  openWebUIVerifyError?: string;
+}
+
+export interface DockerMcpToolkitStatus {
+  enabled: boolean;
+  containerRunning: boolean;
+  supported: boolean;
+  profileAvailable: boolean;
+  gatewayReachable: boolean;
+  openWebUIToolServerConfigured: boolean;
+  integrationConfigured: boolean;
+  lastChecked: number;
+  gatewayUrl?: string;
+  message?: string;
+  details?: DockerMcpToolkitStatusDetails;
 }
 
 // Minimal typed shape for Docker listContainers entries

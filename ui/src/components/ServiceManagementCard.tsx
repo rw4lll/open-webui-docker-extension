@@ -1,4 +1,4 @@
-import { Memory, PlayArrow, Refresh, Stop } from '@mui/icons-material';
+import { Memory, PlayArrow, Refresh, SettingsEthernet, Stop } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -13,7 +13,8 @@ import {
 import { alpha } from '@mui/material/styles';
 
 import { PROVISIONER_LABELS } from '../constants';
-import type { ContainerStatus, ServiceStatus } from '../types';
+import type { ContainerStatus, DockerMcpToolkitStatus, ServiceStatus } from '../types';
+import { isDockerMcpToolkitReady } from '../utils/mcpToolkitStatus';
 
 interface ServiceManagementCardProps {
   status: ContainerStatus | null;
@@ -22,10 +23,13 @@ interface ServiceManagementCardProps {
   dmrStatus?: ServiceStatus | null;
   dmrGateMode?: 'hard' | 'soft' | 'none';
   dmrHoldOpen?: boolean;
+  mcpToolkitInitializing?: boolean;
+  mcpToolkitStatus?: DockerMcpToolkitStatus | null;
   onStart: () => void;
   onStop: () => void;
   onRestart: () => void;
   onRetryDMR?: () => void;
+  onRetryMcpToolkit?: () => void;
 }
 
 export function ServiceManagementCard({
@@ -35,10 +39,13 @@ export function ServiceManagementCard({
   dmrStatus,
   dmrGateMode = 'none',
   dmrHoldOpen,
+  mcpToolkitInitializing,
+  mcpToolkitStatus,
   onStart,
   onStop,
   onRestart,
   onRetryDMR,
+  onRetryMcpToolkit,
 }: ServiceManagementCardProps) {
   const containerState = status?.status;
   const isRunning = containerState === 'running';
@@ -52,6 +59,10 @@ export function ServiceManagementCard({
   const dmrReady = !!dmrStatus && integrationConfigured && dmrStatus.dockerModelRunnerConnected;
   const dmrSetupBlocking = dmrGateMode === 'hard' && Boolean(dmrHoldOpen);
   const dmrSetupInProgress = Boolean(dmrInitializing || dmrSetupBlocking || dmrGateMode === 'soft');
+  const mcpReady = isDockerMcpToolkitReady(mcpToolkitStatus);
+  const hasMcpStatus = Boolean(mcpToolkitStatus);
+  const mcpNeedsAttention = hasMcpStatus && !mcpReady;
+  const mcpSetupInProgress = Boolean(mcpToolkitInitializing);
 
   const effectivePort = status?.config?.port;
 
@@ -64,15 +75,21 @@ export function ServiceManagementCard({
   } else if (!status) {
     notificationSeverity = 'info';
     notificationMessage = 'Waiting for container status...';
-  } else if (isRunning && dmrReady) {
-    notificationSeverity = 'success';
-    notificationMessage = `Container running${effectivePort ? ` on port ${effectivePort}` : ''}. Docker Model Runner is connected.`;
-  } else if (isRunning && dmrSetupInProgress) {
+  } else if (isRunning && (dmrSetupInProgress || mcpSetupInProgress)) {
     notificationSeverity = 'info';
-    notificationMessage = 'Container running. Docker Model Runner setup is in progress.';
+    notificationMessage = 'Container running. Integration setup is in progress.';
+  } else if (isRunning && !hasMcpStatus) {
+    notificationSeverity = 'info';
+    notificationMessage = 'Container running. Checking integration status...';
+  } else if (isRunning && dmrReady && mcpReady) {
+    notificationSeverity = 'success';
+    notificationMessage = `Container running${effectivePort ? ` on port ${effectivePort}` : ''}. Integrations look healthy.`;
   } else if (isRunning && !dmrReady) {
     notificationSeverity = 'warning';
     notificationMessage = 'Container running. Docker Model Runner needs attention.';
+  } else if (isRunning && mcpNeedsAttention) {
+    notificationSeverity = 'warning';
+    notificationMessage = 'Container running. Docker MCP Toolkit integration needs attention.';
   } else if (containerState === 'not_found') {
     notificationSeverity = 'warning';
     notificationMessage = 'Open WebUI container not found. Start the service to create it.';
@@ -150,6 +167,69 @@ export function ServiceManagementCard({
     dmrDescription = issues.length > 0 ? `${issues.join('. ')}.` : 'Integration needs attention.';
   }
 
+  let mcpStatusLabel = 'Not Checked';
+  let mcpChipColor: 'success' | 'warning' | 'default' | 'info' | 'error' = 'default';
+  let mcpDescription = 'Docker MCP Toolkit status has not been checked yet.';
+
+  if (mcpSetupInProgress) {
+    mcpStatusLabel = 'Setting Up';
+    mcpChipColor = 'info';
+    mcpDescription = 'Checking Docker MCP Toolkit integration in the background...';
+  } else if (!mcpToolkitStatus) {
+    mcpStatusLabel = 'Pending';
+    mcpChipColor = 'default';
+  } else if (!mcpToolkitStatus.enabled) {
+    if (mcpToolkitStatus.integrationConfigured) {
+      mcpStatusLabel = 'Disabled';
+      mcpChipColor = 'default';
+      mcpDescription = mcpToolkitStatus.message ?? 'Docker MCP Toolkit integration is disabled.';
+    } else {
+      mcpStatusLabel = 'Needs Attention';
+      mcpChipColor = 'warning';
+      mcpDescription =
+        mcpToolkitStatus.message ??
+        'Docker MCP Toolkit integration is disabled but deprovisioning is incomplete.';
+    }
+  } else if (mcpToolkitStatus.integrationConfigured) {
+    mcpStatusLabel = 'Ready';
+    mcpChipColor = 'success';
+    mcpDescription = mcpToolkitStatus.gatewayUrl
+      ? `Configured via ${mcpToolkitStatus.gatewayUrl}.`
+      : 'Configured in Open WebUI.';
+  } else {
+    const issues: string[] = [];
+    if (!mcpToolkitStatus.supported) {
+      issues.push('Docker MCP Toolkit unavailable');
+    }
+    if (!mcpToolkitStatus.profileAvailable) {
+      issues.push('Default MCP profile missing (using container defaults)');
+    }
+    if (!mcpToolkitStatus.gatewayReachable) {
+      issues.push('Gateway not reachable from container');
+    }
+    if (!mcpToolkitStatus.openWebUIToolServerConfigured) {
+      issues.push('Open WebUI tool server not configured');
+    }
+    if (mcpToolkitStatus.details?.openWebUIVerifyError) {
+      issues.push('Open WebUI verification failed');
+    }
+
+    mcpStatusLabel = !mcpToolkitStatus.supported ? 'Unsupported' : 'Needs Attention';
+    mcpChipColor = !mcpToolkitStatus.supported ? 'error' : 'warning';
+    mcpDescription =
+      mcpToolkitStatus.message ??
+      (issues.length > 0 ? `${issues.join('. ')}.` : 'Integration needs attention.');
+  }
+
+  const canRetryMcp = Boolean(
+    onRetryMcpToolkit &&
+      isRunning &&
+      !loading &&
+      !mcpToolkitInitializing &&
+      mcpToolkitStatus &&
+      !isDockerMcpToolkitReady(mcpToolkitStatus),
+  );
+
   return (
     <Card
       sx={(theme) => ({
@@ -169,7 +249,7 @@ export function ServiceManagementCard({
           Service Management
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Manage the running Open WebUI container and Docker Model Runner integration.
+          Manage the running Open WebUI container and integration services.
         </Typography>
         <Alert severity={notificationSeverity} sx={{ mt: 2 }}>
           {notificationMessage}
@@ -232,6 +312,30 @@ export function ServiceManagementCard({
               </Box>
               <Chip label={dmrStatusLabel} color={dmrChipColor} variant="filled" size="small" />
             </Box>
+
+            <Divider sx={{ borderStyle: 'dashed' }} />
+
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
+                justifyContent: 'space-between',
+                gap: 1,
+              }}
+            >
+              <Box>
+                <Typography variant="subtitle2">Docker MCP Toolkit</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {mcpDescription}
+                </Typography>
+                {mcpToolkitStatus?.details?.profileId && (
+                  <Typography variant="caption" color="text.secondary">
+                    Profile: {mcpToolkitStatus.details.profileId}
+                  </Typography>
+                )}
+              </Box>
+              <Chip label={mcpStatusLabel} color={mcpChipColor} variant="filled" size="small" />
+            </Box>
           </Stack>
         </Box>
 
@@ -288,6 +392,17 @@ export function ServiceManagementCard({
                 disabled={!!dmrInitializing || loading || dmrReady}
               >
                 Retry Integration
+              </Button>
+            )}
+            {onRetryMcpToolkit && (
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<SettingsEthernet />}
+                onClick={onRetryMcpToolkit}
+                disabled={!canRetryMcp}
+              >
+                Retry MCP Toolkit
               </Button>
             )}
           </Stack>
