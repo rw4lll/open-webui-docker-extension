@@ -1,4 +1,10 @@
-import { DEFAULT_AUTO_START, DEFAULT_IMAGE, DEFAULT_PORT, DEFAULT_PROVISIONER } from '../constants';
+import {
+  DEFAULT_AUTO_START,
+  DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT,
+  DEFAULT_IMAGE,
+  DEFAULT_PORT,
+  DEFAULT_PROVISIONER,
+} from '../constants';
 import { log } from '../logger';
 import type { ExtensionConfig, ProvisionerMode } from '../types';
 import { createLocalStorageAdapter, type StorageAdapter } from './storage';
@@ -10,8 +16,9 @@ const MIGRATION_VERSION_KEY = `${STORAGE_KEY}-migration-version`;
 /**
  * Current migration schema version. Bump this when adding new migrations.
  * v1: Migrate default provisioner from legacy-function → openai.
+ * v2: Add `enableDockerMcpToolkit` toggle with default true.
  */
-const CURRENT_MIGRATION_VERSION = 1;
+const CURRENT_MIGRATION_VERSION = 2;
 
 const IMAGE_REGEX =
   /^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?::[0-9]+)?\/)?(?:[a-z0-9]+(?:[._-][a-z0-9]+)*\/)*[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[a-zA-Z0-9][a-zA-Z0-9._-]*)?$/;
@@ -21,6 +28,7 @@ const DEFAULT_CONFIG: ExtensionConfig = {
   port: DEFAULT_PORT,
   autoStart: DEFAULT_AUTO_START,
   provisioner: DEFAULT_PROVISIONER,
+  enableDockerMcpToolkit: DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT,
 };
 
 function normalizeImage(image: string): string {
@@ -79,6 +87,10 @@ function normalizeProvisioner(mode: unknown): ProvisionerMode {
   return mode === 'legacy-function' ? 'legacy-function' : DEFAULT_PROVISIONER;
 }
 
+function normalizeDockerMcpToolkitToggle(value: unknown): boolean {
+  return typeof value === 'boolean' ? value : DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT;
+}
+
 export class ConfigRepository {
   constructor(private readonly storage: StorageAdapter) {}
 
@@ -128,6 +140,7 @@ export class ConfigRepository {
       port: normalizePort(config.port),
       autoStart: typeof config.autoStart === 'boolean' ? config.autoStart : DEFAULT_AUTO_START,
       provisioner: normalizeProvisioner(config.provisioner),
+      enableDockerMcpToolkit: normalizeDockerMcpToolkitToggle(config.enableDockerMcpToolkit),
     };
   }
 
@@ -171,7 +184,8 @@ export class ConfigRepository {
       config1.image === config2.image &&
       config1.port === config2.port &&
       config1.autoStart === config2.autoStart &&
-      config1.provisioner === config2.provisioner
+      config1.provisioner === config2.provisioner &&
+      config1.enableDockerMcpToolkit === config2.enableDockerMcpToolkit
     );
   }
 
@@ -236,6 +250,9 @@ export class ConfigRepository {
     if (storedVersion < 1) {
       migrated = this.migrationV1(migrated, raw);
     }
+    if (storedVersion < 2) {
+      migrated = this.migrationV2(migrated, raw);
+    }
 
     // Persist the migrated config and bump the version marker.
     try {
@@ -263,6 +280,23 @@ export class ConfigRepository {
         `Config migration v1: provisioner "${String(storedProvisioner)}" → "${DEFAULT_PROVISIONER}" (new default)`,
       );
       return { ...config, provisioner: DEFAULT_PROVISIONER };
+    }
+
+    return config;
+  }
+
+  /**
+   * Migration v2 — add docker MCP Toolkit toggle with default enabled.
+   */
+  private migrationV2(config: ExtensionConfig, raw: Partial<ExtensionConfig>): ExtensionConfig {
+    if (typeof raw.enableDockerMcpToolkit !== 'boolean') {
+      log.info(
+        `Config migration v2: enableDockerMcpToolkit "${String(raw.enableDockerMcpToolkit)}" → "${String(DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT)}"`,
+      );
+      return {
+        ...config,
+        enableDockerMcpToolkit: DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT,
+      };
     }
 
     return config;

@@ -19,6 +19,22 @@ export const DEFAULT_IMAGE = 'ghcr.io/open-webui/open-webui:main';
 export const DEFAULT_PORT = '8090';
 export const DEFAULT_AUTO_START = true;
 export const DEFAULT_PROVISIONER = 'openai' as const;
+export const DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT = true;
+
+export const DOCKER_MCP_TOOLKIT_PROFILE_ID = 'default';
+export const DOCKER_MCP_TOOLKIT_SERVER_ID = 'docker-mcp-toolkit';
+export const DOCKER_MCP_TOOLKIT_SERVER_NAME = 'Docker MCP Toolkit';
+export const DOCKER_MCP_TOOLKIT_GATEWAY_CONTAINER_NAME = 'openwebui-extension-mcp-gateway';
+export const DOCKER_MCP_TOOLKIT_GATEWAY_CONTAINER_IMAGE = 'docker/mcp-gateway:v2';
+export const DOCKER_MCP_TOOLKIT_GATEWAY_CONTAINER_LABELS = {
+  'com.docker.extension.openwebui': 'true',
+  'com.docker.extension.openwebui.role': 'mcp-gateway',
+} as const;
+export const DOCKER_MCP_TOOLKIT_GATEWAY_DEFAULT_SERVER = 'docker';
+export const DOCKER_MCP_TOOLKIT_GATEWAY_HOST = 'host.docker.internal';
+export const DOCKER_MCP_TOOLKIT_GATEWAY_PORT = 8812;
+export const DOCKER_MCP_TOOLKIT_GATEWAY_PATH = '/mcp';
+export const DOCKER_MCP_TOOLKIT_GATEWAY_HEALTH_PATH = '/health';
 
 export const PROVISIONER_LABEL_KEY = 'com.docker.extension.openwebui.provisioner';
 
@@ -47,6 +63,11 @@ export const DMR_POLL_INTERVAL_NOT_READY_MS = 10 * 1000;
 export const DMR_POLL_INTERVAL_READY_MS = 2 * 60 * 1000;
 export const DMR_SETUP_COOLDOWN_MS = 30 * 1000;
 
+export const MCP_TOOLKIT_STATUS_CACHE_TTL_MS = 5 * 60 * 1000;
+export const MCP_TOOLKIT_POLL_INTERVAL_NOT_READY_MS = 15 * 1000;
+export const MCP_TOOLKIT_POLL_INTERVAL_READY_MS = 2 * 60 * 1000;
+export const MCP_TOOLKIT_SETUP_COOLDOWN_MS = 30 * 1000;
+
 export const IMAGE_UPDATE_CACHE_TTL_MS = 5 * 60 * 1000;
 export const IMAGE_UPDATE_POLL_INTERVAL_MS = 5 * 60 * 1000;
 export const IMAGE_UPDATE_FLOATING_TAG_REGEX = /:(main|latest)$/i;
@@ -70,4 +91,11 @@ export const DMR_SETUP_MESSAGES = {
   openai_configured: 'Container ready with OpenAI-compatible Docker Model Runner integration',
   openai_not_configured:
     'Container ready. OpenAI-compatible Docker Model Runner integration needs attention.',
+} as const;
+
+export const MCP_TOOLKIT_SETUP_MESSAGES = {
+  configured: 'Docker MCP Toolkit integration is configured in Open WebUI',
+  disabled: 'Docker MCP Toolkit integration is disabled',
+  unsupported: 'Docker MCP Toolkit is unavailable on this Docker Desktop setup',
+  needs_attention: 'Docker MCP Toolkit integration needs attention',
 } as const;

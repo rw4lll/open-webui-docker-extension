@@ -4,6 +4,7 @@ import {
   VOLUME_NAMES,
   DEFAULT_PORT,
   DEFAULT_AUTO_START,
+  DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT,
   DEFAULT_PROVISIONER,
   OPENAI_PROVIDER_DEFAULTS,
   PROVISIONER_LABEL_KEY,
@@ -20,10 +21,48 @@ import type {
 import { CONTAINER_STATES } from '../types';
 import { getStderr, toErrorMessage } from '../utils/dockerCliError';
 import { getDDClient, type DockerDesktopClient } from './dockerDesktopClient';
+import { createLocalStorageAdapter, type StorageAdapter } from './storage';
 
 const SERVICE_CONTAINER_NAME = CONTAINER_NAME;
 const SERVICE_LABELS = CONTAINER_LABELS;
 const SHA256_DIGEST_REGEX = /\bsha256:[a-f0-9]{64}\b/i;
+const WEBUI_SECRET_KEY_STORAGE_KEY = 'openwebui-extension-webui-secret-key';
+const WEBUI_SECRET_KEY_LENGTH_BYTES = 32;
+
+function generateWebUISecretKey(): string {
+  const randomBytes = new Uint8Array(WEBUI_SECRET_KEY_LENGTH_BYTES);
+  const cryptoObj = (globalThis as { crypto?: Crypto }).crypto;
+  if (cryptoObj?.getRandomValues) {
+    cryptoObj.getRandomValues(randomBytes);
+  } else {
+    for (let index = 0; index < randomBytes.length; index += 1) {
+      randomBytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  return Array.from(randomBytes)
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function resolvePersistentWebUISecretKey(storage: StorageAdapter = createLocalStorageAdapter()): string {
+  try {
+    const existing = storage.getItem(WEBUI_SECRET_KEY_STORAGE_KEY);
+    if (existing && existing.trim().length >= WEBUI_SECRET_KEY_LENGTH_BYTES * 2) {
+      return existing.trim();
+    }
+  } catch (error) {
+    log.warn('Failed reading persisted WEBUI_SECRET_KEY; generating a new key.', error);
+  }
+
+  const generated = generateWebUISecretKey();
+  try {
+    storage.setItem(WEBUI_SECRET_KEY_STORAGE_KEY, generated);
+  } catch (error) {
+    log.warn('Failed persisting WEBUI_SECRET_KEY; using in-memory value for this session.', error);
+  }
+  return generated;
+}
 
 function isFloatingImageTag(image: string | null | undefined): boolean {
   return typeof image === 'string' && IMAGE_UPDATE_FLOATING_TAG_REGEX.test(image.trim());
@@ -202,8 +241,14 @@ export interface ContainerInspectionResult {
 
 export class ContainerService {
   private createInFlight: Promise<void> | null = null;
+  private readonly webUISecretKey: string;
 
-  constructor(private readonly clientProvider: () => DockerDesktopClient = getDDClient) {}
+  constructor(
+    private readonly clientProvider: () => DockerDesktopClient = getDDClient,
+    private readonly webUISecretKeyProvider: () => string = () => resolvePersistentWebUISecretKey(),
+  ) {
+    this.webUISecretKey = this.webUISecretKeyProvider();
+  }
 
   private get client(): DockerDesktopClient {
     return this.clientProvider();
@@ -226,6 +271,8 @@ export class ContainerService {
       'ENV=dev',
       '-e',
       'WEBUI_AUTH=False',
+      '-e',
+      `WEBUI_SECRET_KEY=${this.webUISecretKey}`,
       '-e',
       'ENABLE_VERSION_UPDATE_CHECK=False',
     ];
@@ -720,6 +767,7 @@ export class ContainerService {
           port: '',
           autoStart: DEFAULT_AUTO_START,
           provisioner: DEFAULT_PROVISIONER,
+          enableDockerMcpToolkit: DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT,
         },
       };
     }
@@ -747,6 +795,7 @@ export class ContainerService {
         port: actualPort,
         autoStart: DEFAULT_AUTO_START,
         provisioner,
+        enableDockerMcpToolkit: DEFAULT_ENABLE_DOCKER_MCP_TOOLKIT,
       },
     };
   }
@@ -858,13 +907,14 @@ export class ContainerService {
 export function createContainerService(options?: {
   client?: DockerDesktopClient;
   clientProvider?: () => DockerDesktopClient;
+  webUISecretKeyProvider?: () => string;
 }): ContainerService {
   if (options?.clientProvider) {
-    return new ContainerService(options.clientProvider);
+    return new ContainerService(options.clientProvider, options.webUISecretKeyProvider);
   }
   if (options?.client) {
     const client = options.client;
-    return new ContainerService(() => client);
+    return new ContainerService(() => client, options.webUISecretKeyProvider);
   }
-  return new ContainerService();
+  return new ContainerService(undefined, options?.webUISecretKeyProvider);
 }

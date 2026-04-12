@@ -1,6 +1,7 @@
 import { DMR_DEFAULTS, CONTAINER_NAME } from '../constants';
 import { log } from '../logger';
 import type {
+  DockerMcpToolkitStatus,
   ExtensionConfig,
   OpenWebUIFunction,
   FunctionInstallResult,
@@ -10,6 +11,7 @@ import type {
 import { defaultAuthTokenStore, type AuthTokenStore } from './authTokenStore';
 import { FunctionsClient } from './functionsClient';
 import { OpenWebUIHttpClient, type HttpRequestOptions } from './openWebUIHttpClient';
+import { OpenWebUIMcpToolkitProvisioner } from './openWebUIMcpToolkitProvisioner';
 import {
   LegacyFunctionProvisioner,
   OpenAIEnvProvisioner,
@@ -26,6 +28,7 @@ export class OpenWebUIApiService {
   private readonly legacyProvisioner: LegacyFunctionProvisioner;
   private readonly openAIProvisioner: OpenAIEnvProvisioner;
   private readonly provisionerRegistry: ProvisionerRegistry;
+  private readonly mcpToolkitProvisioner: OpenWebUIMcpToolkitProvisioner;
   private readonly functionsCacheTtlMs: number;
 
   constructor(
@@ -59,6 +62,10 @@ export class OpenWebUIApiService {
       legacyProvisioner: this.legacyProvisioner,
       openAIProvisioner: this.openAIProvisioner,
     });
+    this.mcpToolkitProvisioner = new OpenWebUIMcpToolkitProvisioner({
+      http: this.http,
+      config,
+    });
 
     log.debug('OpenWebUIApiService initialized:', {
       apiBaseUrl: this.http.getApiBaseUrl(),
@@ -84,9 +91,11 @@ export class OpenWebUIApiService {
     this.http.updateConfig(newConfig);
     this.functions.clearCache();
     this.provisionerRegistry.resetAllConnectivityCaches();
+    this.mcpToolkitProvisioner.updateConfig(newConfig);
     log.debug('OpenWebUIApiService config updated:', {
       externalPort: newConfig.port,
       provisioner: newConfig.provisioner,
+      enableDockerMcpToolkit: newConfig.enableDockerMcpToolkit,
     });
   }
 
@@ -137,6 +146,22 @@ export class OpenWebUIApiService {
     const provisioner = this.provisionerRegistry.resolve(this.config.provisioner);
     const status = await provisioner.verifyIntegration();
     return toServiceStatus(status);
+  }
+
+  async setupDockerMcpToolkitIntegration(): Promise<DockerMcpToolkitStatus> {
+    return this.mcpToolkitProvisioner.setupIntegration();
+  }
+
+  async verifyDockerMcpToolkitIntegration(): Promise<DockerMcpToolkitStatus> {
+    return this.mcpToolkitProvisioner.verifyIntegration();
+  }
+
+  clearDockerMcpToolkitCache(): void {
+    this.mcpToolkitProvisioner.clearCaches();
+  }
+
+  async stopDockerMcpToolkitGatewayContainer(): Promise<void> {
+    await this.mcpToolkitProvisioner.removeManagedGatewayContainer();
   }
 
   async getServiceStatus(): Promise<ServiceStatus> {

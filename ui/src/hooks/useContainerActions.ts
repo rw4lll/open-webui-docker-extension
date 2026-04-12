@@ -25,6 +25,7 @@ interface UseContainerActionsOptions {
   configsEqual: (a: ExtensionConfig, b: ExtensionConfig) => boolean;
   ensureIntegration: (options?: { force?: boolean }) => Promise<ServiceStatus | null>;
   invalidateDMRCache?: () => void;
+  invalidateMcpToolkitCache?: () => void;
 }
 
 interface UseContainerActionsResult {
@@ -50,6 +51,7 @@ export function useContainerActions({
   configsEqual,
   ensureIntegration,
   invalidateDMRCache,
+  invalidateMcpToolkitCache,
 }: UseContainerActionsOptions): UseContainerActionsResult {
   const ddClient = getDDClient();
   const service = containerService;
@@ -144,6 +146,7 @@ export function useContainerActions({
       async () => {
         try {
           invalidateDMRCache?.();
+          invalidateMcpToolkitCache?.();
           log.debug('Starting container with config:', config);
           const containerExists = await service.containerExists();
           log.debug('Container exists:', containerExists);
@@ -184,6 +187,7 @@ export function useContainerActions({
     config,
     ensureIntegration,
     invalidateDMRCache,
+    invalidateMcpToolkitCache,
     runAsync,
     scheduleStatusRefresh,
     service,
@@ -192,19 +196,21 @@ export function useContainerActions({
 
   const stopContainer = useCallback(() => {
     invalidateDMRCache?.();
+    invalidateMcpToolkitCache?.();
     runServiceAction(() => service.stopContainer(), {
       successMessage: 'Container stopped successfully',
       errorPrefix: 'Failed to stop container',
     });
-  }, [invalidateDMRCache, runServiceAction, service]);
+  }, [invalidateDMRCache, invalidateMcpToolkitCache, runServiceAction, service]);
 
   const restartContainer = useCallback(() => {
     invalidateDMRCache?.();
+    invalidateMcpToolkitCache?.();
     runServiceAction(() => service.restartContainer(), {
       successMessage: 'Container restarted successfully',
       errorPrefix: 'Failed to restart container',
     });
-  }, [invalidateDMRCache, runServiceAction, service]);
+  }, [invalidateDMRCache, invalidateMcpToolkitCache, runServiceAction, service]);
 
   const updateConfig = useCallback(
     async (nextConfig: ExtensionConfig) => {
@@ -219,9 +225,14 @@ export function useContainerActions({
             const configChanged = !configsEqual(config, nextConfig);
             const normalized = persistConfig(nextConfig);
             const containerExists = await service.containerExists();
+            const requiresContainerRecreate =
+              config.image !== normalized.image ||
+              config.port !== normalized.port ||
+              config.provisioner !== normalized.provisioner;
 
-            if (containerExists && configChanged) {
+            if (containerExists && configChanged && requiresContainerRecreate) {
               invalidateDMRCache?.();
+              invalidateMcpToolkitCache?.();
               setMessage('Configuration changed. Recreating container...');
               await service.recreateContainer(normalized);
               setMessage('Container recreated successfully with new configuration');
@@ -254,6 +265,7 @@ export function useContainerActions({
       setMessage,
       validateConfig,
       invalidateDMRCache,
+      invalidateMcpToolkitCache,
     ],
   );
 
@@ -262,6 +274,7 @@ export function useContainerActions({
       async () => {
         try {
           invalidateDMRCache?.();
+          invalidateMcpToolkitCache?.();
           setMessage('Pulling updated image...');
           await service.pullImage(config.image);
 
@@ -288,6 +301,7 @@ export function useContainerActions({
     config,
     ensureIntegration,
     invalidateDMRCache,
+    invalidateMcpToolkitCache,
     pollForUpdatedStatus,
     runAsync,
     scheduleStatusRefresh,

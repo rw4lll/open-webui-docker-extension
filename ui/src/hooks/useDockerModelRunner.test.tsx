@@ -41,6 +41,7 @@ describe('useDockerModelRunner', () => {
     port: '8090',
     autoStart: true,
     provisioner: 'openai',
+    enableDockerMcpToolkit: true,
   };
   const runningStatus: ContainerStatus = {
     status: 'running',

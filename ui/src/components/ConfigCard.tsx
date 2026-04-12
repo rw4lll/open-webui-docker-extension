@@ -19,6 +19,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Link,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useCallback, useEffect, useState } from 'react';
@@ -31,10 +32,21 @@ interface ConfigCardProps {
   config: ExtensionConfig;
   loading: boolean;
   onUpdate: (config: ExtensionConfig) => Promise<void>;
+  onSyncDockerMcpToolkit?: () => void | Promise<void>;
+  syncingDockerMcpToolkit?: boolean;
+  canSyncDockerMcpToolkit?: boolean;
   validateConfig?: (config: ExtensionConfig) => string[];
 }
 
-export default function ConfigCard({ config, loading, onUpdate, validateConfig }: ConfigCardProps) {
+export default function ConfigCard({
+  config,
+  loading,
+  onUpdate,
+  onSyncDockerMcpToolkit,
+  syncingDockerMcpToolkit = false,
+  canSyncDockerMcpToolkit = false,
+  validateConfig,
+}: ConfigCardProps) {
   const [localConfig, setLocalConfig] = useState<ExtensionConfig>(config);
   const [hasChanges, setHasChanges] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -57,7 +69,8 @@ export default function ConfigCard({ config, loading, onUpdate, validateConfig }
       newConfig.image !== config.image ||
         newConfig.port !== config.port ||
         newConfig.autoStart !== config.autoStart ||
-        newConfig.provisioner !== config.provisioner,
+        newConfig.provisioner !== config.provisioner ||
+        newConfig.enableDockerMcpToolkit !== config.enableDockerMcpToolkit,
     );
     setValidationErrors(runValidation(newConfig));
   };
@@ -88,6 +101,21 @@ export default function ConfigCard({ config, loading, onUpdate, validateConfig }
   };
 
   const isValid = validationErrors.length === 0;
+  const showSyncMcpLink = Boolean(localConfig.enableDockerMcpToolkit);
+  const syncMcpDisabled =
+    !onSyncDockerMcpToolkit ||
+    loading ||
+    syncingDockerMcpToolkit ||
+    hasChanges ||
+    !config.enableDockerMcpToolkit ||
+    !canSyncDockerMcpToolkit;
+
+  const handleSyncDockerMcpToolkit = () => {
+    if (syncMcpDisabled || !onSyncDockerMcpToolkit) {
+      return;
+    }
+    void onSyncDockerMcpToolkit();
+  };
 
   return (
     <Card
@@ -220,6 +248,68 @@ export default function ConfigCard({ config, loading, onUpdate, validateConfig }
                 color="warning"
                 size="small"
                 sx={{ ml: 1 }}
+                icon={<Warning />}
+              />
+            )}
+          </Box>
+
+          <Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!localConfig.enableDockerMcpToolkit}
+                  onChange={(e) =>
+                    handleLocalConfigChange({
+                      ...localConfig,
+                      enableDockerMcpToolkit: e.target.checked,
+                    })
+                  }
+                  size="small"
+                />
+              }
+              label="Enable Docker MCP Toolkit integration"
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              Automatically provisions a Docker Desktop MCP Toolkit server entry inside Open WebUI.
+            </Typography>
+            {showSyncMcpLink && (
+              <Box sx={{ mt: 0.5 }}>
+                <Link
+                  component="button"
+                  type="button"
+                  variant="caption"
+                  underline="hover"
+                  onClick={handleSyncDockerMcpToolkit}
+                  aria-disabled={syncMcpDisabled}
+                  sx={{
+                    p: 0,
+                    border: 0,
+                    background: 'none',
+                    cursor: syncMcpDisabled ? 'default' : 'pointer',
+                    opacity: syncMcpDisabled ? 0.6 : 1,
+                    pointerEvents: syncMcpDisabled ? 'none' : 'auto',
+                  }}
+                >
+                  {syncingDockerMcpToolkit ? 'Syncing MCP servers...' : 'Sync MCP servers from host'}
+                </Link>
+                {hasChanges && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                    Apply configuration changes before syncing.
+                  </Typography>
+                )}
+                {!hasChanges && !canSyncDockerMcpToolkit && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                    Start the container before syncing.
+                  </Typography>
+                )}
+              </Box>
+            )}
+            {localConfig.enableDockerMcpToolkit !== config.enableDockerMcpToolkit && (
+              <Chip
+                label="Changed"
+                color="warning"
+                size="small"
+                sx={{ mt: 1 }}
                 icon={<Warning />}
               />
             )}
